@@ -115,6 +115,8 @@ test("mixed dice can merge and unavailable sums are not offered", async ({
 test("merge choices fit a narrow shop and cannot be used during a roll", async ({
   page,
 }) => {
+  await page.clock.install({ time: 0 });
+  await page.clock.pauseAt(1000);
   await page.setViewportSize({ width: 320, height: 740 });
   await setup(page, {
     ...newGame(),
@@ -138,8 +140,6 @@ test("merge choices fit a narrow shop and cannot be used during a roll", async (
   await page
     .getByRole("button", { name: "Close dice shop", exact: true })
     .click();
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
   await page
     .getByRole("button", { name: "Roll your dice", exact: true })
     .click();
