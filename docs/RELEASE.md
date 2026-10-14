@@ -1,6 +1,14 @@
 # Mobile Web Test Release — v0.1.0
 
-## One-second skippable rolls — #27
+## Skip fast-forwards the remaining animation — #29
+
+Corrects #27’s interpretation: normal rolls again take about 4.7 seconds. Skip speeds up the remaining sequence to finish within one second of the click, preserving its current phase and the current frame of active flights. When less than one second remains, it retains the existing speed. Repeated clicks do not restart or extend the deadline, and each subsequent roll returns to normal speed.
+
+The same playback clock retimes phase deadlines and all active or newly created CSS and Web Animations. Skip does not commit the result or credit the wallet early: face reveal still commits the generated result once, and the visible wallet updates when the coins arrive. Money still starts at Level X; reduced-motion rolls remain immediate. Rules, prices and saves are unchanged.
+
+Validation: full gate with 52 unit checks, 64 desktop/mobile browser checks, type checking/build and unchanged progression reports. Checks cover normal completion, Skip during rolling/gathering/targeting/reward/crediting/collection, preserved flight identity and position, repeated clicks, deadlines, subsequent normal-speed rolls and reload.
+
+## One-second skippable rolls — #27 (superseded by #29)
 
 The complete roll presentation lasts 1,000 ms, from tumbling through wallet collection, for both wins and losses. The enabled Skip button replaces Roll during the sequence and completes the already-generated result immediately. Pending results commit once on face reveal or Skip, and remaining timers and flights cancel when the sequence ends. Reduced motion remains immediate.
 

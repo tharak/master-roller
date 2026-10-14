@@ -21,14 +21,14 @@ async function section(page: Page, name: "Play" | "Dice shop") {
       .click();
 }
 async function resolveFaces(page: Page) {
-  await page.clock.fastForward(120);
+  await page.clock.fastForward(550);
   await expect(page.locator(".arena")).toHaveAttribute("data-phase", "faces");
-  await page.clock.fastForward(80);
+  await page.clock.fastForward(280);
   await expect(page.locator(".arena")).toHaveAttribute(
     "data-phase",
     "gathering",
   );
-  await page.clock.fastForward(160);
+  await page.clock.fastForward(595);
   await expect(page.locator(".arena")).toHaveAttribute("data-phase", "total");
 }
 
@@ -525,7 +525,7 @@ for (const scenario of [
     await expect(
       page.getByRole("button", { name: "Skip animation", exact: true }),
     ).toBeEnabled();
-    await page.clock.fastForward(120);
+    await page.clock.fastForward(550);
     await expect(arena).toHaveAttribute("data-phase", "faces");
     await expect(
       page.getByLabel(`d4 rolled ${scenario.face}`, { exact: true }),
@@ -539,7 +539,7 @@ for (const scenario of [
         () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
       ),
     ).toBe(scenario.total);
-    await page.clock.fastForward(80);
+    await page.clock.fastForward(280);
     await expect(arena).toHaveAttribute("data-phase", "gathering");
     expect(
       await page
@@ -548,7 +548,7 @@ for (const scenario of [
           dice.every((die) => die.getAnimations().length > 0),
         ),
     ).toBe(true);
-    await page.clock.fastForward(160);
+    await page.clock.fastForward(595);
     await expect(arena).toHaveAttribute("data-phase", "total");
     await expect(page.locator(".play-die").first()).toHaveCSS("opacity", "0");
     await expect(page.getByTestId("roll-total")).toHaveText(
@@ -558,7 +558,7 @@ for (const scenario of [
       "data-die-shape",
       "pyramid",
     );
-    await page.clock.fastForward(90);
+    await page.clock.fastForward(450);
     await expect(arena).toHaveAttribute("data-phase", "targeting");
     const collision = await page
       .locator(".total-flight")
@@ -581,7 +581,7 @@ for (const scenario of [
       });
     expect(collision.centerGap).toBeLessThan(1);
     expect(collision.edgeGap).toBeLessThan(1);
-    await page.clock.fastForward(150);
+    await page.clock.fastForward(600);
     await expect(arena).toHaveAttribute("data-phase", "impact");
     await expect(page.locator(".impact-shard")).toHaveCount(12);
     await expect(page.getByTestId("target")).toHaveText(
@@ -596,13 +596,13 @@ for (const scenario of [
     ).toHaveCount(1);
     await expect(wallet).toBeVisible();
     await expect(wallet).toBeDisabled();
-    await page.clock.fastForward(scenario.won ? 100 : 160);
+    await page.clock.fastForward(scenario.won ? 500 : 800);
     if (scenario.won) {
       await expect(arena).toHaveAttribute("data-phase", "leveling");
       await expect(page.getByTestId("target")).toHaveText(
         String(scenario.level),
       );
-      await page.clock.fastForward(60);
+      await page.clock.fastForward(300);
     }
     await expect(arena).toHaveAttribute("data-phase", "reward");
     await expect(page.locator(".earned-reward")).toContainText(
@@ -622,7 +622,7 @@ for (const scenario of [
         origin!.y + origin!.height / 2 - levelText!.y - levelText!.height / 2,
       ),
     ).toBeLessThan(1);
-    await page.clock.fastForward(60);
+    await page.clock.fastForward(500);
     await expect(arena).toHaveAttribute("data-phase", "crediting");
     await expect(page.getByTestId("reward-flight")).toBeVisible();
     await expect(wallet).toBeVisible();
@@ -657,7 +657,7 @@ for (const scenario of [
     expect(flight.originGap).toBeLessThan(1);
     expect(flight.destinationGap).toBeLessThan(1);
     expect(flight.upward).toBe(true);
-    await page.clock.fastForward(150);
+    await page.clock.fastForward(700);
     await expect(arena).toHaveAttribute("data-phase", "collected");
     await expect(
       page.getByRole("button", {
@@ -665,13 +665,13 @@ for (const scenario of [
         exact: true,
       }),
     ).toBeVisible();
-    await page.clock.fastForward(29);
+    await page.clock.fastForward(219);
     await expect(
       page.getByRole("button", { name: "Skip animation", exact: true }),
     ).toBeEnabled();
     await page.clock.fastForward(1);
     await expect(arena).toHaveAttribute("data-phase", "idle");
-    expect((await page.evaluate(() => performance.now())) - started).toBe(1000);
+    expect((await page.evaluate(() => performance.now())) - started).toBe(4695);
     expect(
       await page
         .locator(".play-die")
@@ -689,10 +689,13 @@ for (const scenario of [
 
 for (const [offset, phase] of [
   [0, "rolling"],
-  [200, "gathering"],
-  [820, "crediting"],
+  [1000, "gathering"],
+  [2100, "targeting"],
+  [3400, "reward"],
+  [3900, "crediting"],
+  [4600, "collected"],
 ] as const) {
-  test(`Skip during ${phase} credits one result and cancels the remaining timeline`, async ({
+  test(`Skip during ${phase} speeds the remaining animation without jumping or paying twice`, async ({
     page,
   }) => {
     await page.clock.install();
@@ -703,14 +706,51 @@ for (const [offset, phase] of [
     await page.goto("./");
     await rollButton(page).click();
     if (offset) await page.clock.runFor(offset);
-    await expect(page.locator(".arena")).toHaveAttribute("data-phase", phase);
+    const arena = page.locator(".arena");
+    await expect(arena).toHaveAttribute("data-phase", phase);
+    const activeFlight = page
+      .locator(phase === "gathering" ? ".play-die" : ".total-flight")
+      .first();
+    if (phase === "gathering" || phase === "targeting") {
+      await activeFlight.evaluate((element) => {
+        const animation = element.getAnimations()[0];
+        animation.pause();
+        animation.currentTime = 100;
+        (window as unknown as { skipFlight: Animation }).skipFlight = animation;
+      });
+    }
     const skip = page.getByRole("button", {
       name: "Skip animation",
       exact: true,
     });
-    await expect(skip).toHaveText(/SKIP/);
     await skip.click();
-    await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
+    await expect(arena).toHaveAttribute("data-phase", phase);
+    if (phase === "gathering" || phase === "targeting") {
+      const motion = await activeFlight.evaluate((element) => {
+        const animation = element.getAnimations()[0];
+        return {
+          same:
+            animation ===
+            (window as unknown as { skipFlight: Animation }).skipFlight,
+          time: animation.currentTime,
+          rate: animation.playbackRate,
+        };
+      });
+      expect(motion.same).toBe(true);
+      expect(motion.time).toBe(100);
+      expect(motion.rate).toBeCloseTo((4695 - offset) / 1000);
+    }
+    if (offset < 4475)
+      await expect(
+        page.getByRole("button", { name: "0 Dicecoin", exact: true }),
+      ).toBeDisabled();
+    const duration = Math.min(1000, 4695 - offset);
+    await page.clock.runFor(duration - 1);
+    await expect(skip).toBeVisible();
+    // Repeated clicks never reset or extend the first Skip deadline.
+    await skip.click();
+    await page.clock.runFor(2);
+    await expect(arena).toHaveAttribute("data-phase", "idle");
     await expect(
       page.getByRole("button", { name: "4 Dicecoin", exact: true }),
     ).toBeEnabled();
@@ -725,20 +765,21 @@ for (const [offset, phase] of [
           dice.every((die) => die.getAnimations().length === 0),
         ),
     ).toBe(true);
-    await page.clock.runFor(2000);
-    await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
+    await page.clock.runFor(5000);
     expect(
       await page.evaluate(() =>
         JSON.parse(localStorage.getItem("master-roller:save")!),
       ),
     ).toMatchObject({ level: 2, balance: 4 });
+    // A subsequent roll returns to normal speed.
     await rollButton(page).click();
     await page.clock.runFor(1000);
-    await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
+    await expect(arena).toHaveAttribute("data-phase", "gathering");
+    await page.clock.runFor(3695);
+    await expect(arena).toHaveAttribute("data-phase", "idle");
     await expect(
       page.getByRole("button", { name: "8 Dicecoin", exact: true }),
     ).toBeEnabled();
-    await expect(page.getByTestId("target")).toHaveText("3");
     await page.reload();
     await expect(
       page.getByRole("button", { name: "8 Dicecoin", exact: true }),
@@ -774,13 +815,13 @@ test("highest-sided result die follows the level after resizing", async ({
   expect(
     Math.abs(bounds!.y + bounds!.height / 2 - viewport.height / 2),
   ).toBeLessThan(1);
-  await page.clock.fastForward(90);
+  await page.clock.fastForward(450);
   await expect(page.locator(".arena")).toHaveAttribute(
     "data-phase",
     "targeting",
   );
   await page.setViewportSize({ width: 844, height: 390 });
-  await page.clock.fastForward(150);
+  await page.clock.fastForward(600);
   await expect(page.locator(".arena")).toHaveAttribute("data-phase", "impact");
   const shards = await page.locator(".level-shatter").boundingBox(),
     target = await page.locator(".level-target > .level-copy").boundingBox();
@@ -805,16 +846,16 @@ for (const phase of ["targeting", "impact", "crediting"] as const) {
     await page.goto("./");
     await rollButton(page).click();
     await resolveFaces(page);
-    await page.clock.fastForward(90);
-    if (phase !== "targeting") await page.clock.fastForward(150);
+    await page.clock.fastForward(450);
+    if (phase !== "targeting") await page.clock.fastForward(600);
     if (phase === "crediting") {
       await expect(page.locator(".arena")).toHaveAttribute(
         "data-phase",
         "impact",
       );
-      await page.clock.fastForward(100);
-      await page.clock.fastForward(60);
-      await page.clock.fastForward(60);
+      await page.clock.fastForward(500);
+      await page.clock.fastForward(300);
+      await page.clock.fastForward(500);
     }
     await expect(page.locator(".arena")).toHaveAttribute("data-phase", phase);
     await page.reload();
