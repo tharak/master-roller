@@ -103,7 +103,9 @@ export default function App() {
   const [message, setMessage] = useState("");
   const busy = useRef(false);
   const pendingRoll = useRef<ReturnType<typeof rollGame> | null>(null);
-  const rollStartedAt = useRef(0);
+  const playback = useRef({ at: 0, elapsed: 0, rate: 1 });
+  const [fastForwarding, setFastForwarding] = useState(false);
+  const skipRequested = useRef(false);
   const gameRef = useRef(game);
   gameRef.current = game;
   const diceField = useRef<HTMLElement>(null);
@@ -155,19 +157,25 @@ export default function App() {
       setSaveStatus("unavailable");
     }
   }, [game, saveStatus]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!rolling) return;
-    const timers = Object.entries(ROLL_TIMING).map(([next, at]) =>
-      setTimeout(() => {
-        if (!busy.current) return;
-        if (next === "faces") commitRoll();
-        if (next === "leveling" && !gameRef.current.lastRoll?.won) return;
-        if (next === "idle") busy.current = false;
-        setPhase(next as RollPhase);
-      }, remaining(at)),
-    );
+    const currentOffset = phase === "rolling" ? 0 : ROLL_TIMING[phase];
+    const timers = Object.entries(ROLL_TIMING)
+      .filter(([, at]) => at > currentOffset)
+      .map(([next, at]) =>
+        setTimeout(
+          () => {
+            if (!busy.current) return;
+            if (next === "faces") commitRoll();
+            if (next === "leveling" && !gameRef.current.lastRoll?.won) return;
+            if (next === "idle") busy.current = false;
+            setPhase(next as RollPhase);
+          },
+          remaining(at) / playback.current.rate,
+        ),
+      );
     return () => timers.forEach(clearTimeout);
-  }, [rolling]);
+  }, [rolling, fastForwarding]);
 
   useLayoutEffect(() => {
     if (
@@ -271,8 +279,11 @@ export default function App() {
           },
         ],
         {
-          duration: Math.max(0, remaining(ROLL_TIMING.total) - (index % 6) * 6),
-          delay: (index % 6) * 6,
+          duration: Math.max(
+            0,
+            remaining(ROLL_TIMING.total) - (index % 6) * 15,
+          ),
+          delay: (index % 6) * 15,
           easing: "cubic-bezier(.45, 0, .8, .45)",
           fill: "forwards",
         },
@@ -316,6 +327,15 @@ export default function App() {
     );
     return () => animation.cancel();
   }, [phase, poolSize]);
+  useLayoutEffect(() => {
+    // Retiming existing animations preserves their current frame on Skip.
+    const shell = diceField.current?.closest(".game-shell");
+    shell
+      ?.getAnimations({ subtree: true })
+      .forEach((animation) =>
+        animation.updatePlaybackRate(playback.current.rate),
+      );
+  }, [phase, poolSize, fastForwarding]);
   useEffect(() => {
     if (modal) {
       if (!dialog.current?.open) {
@@ -334,7 +354,9 @@ export default function App() {
   }, [message]);
 
   function remaining(at: number) {
-    return Math.max(0, at - (performance.now() - rollStartedAt.current));
+    const clock = playback.current;
+    const elapsed = clock.elapsed + (performance.now() - clock.at) * clock.rate;
+    return Math.max(0, at - elapsed);
   }
   function commitRoll() {
     if (!pendingRoll.current) return;
@@ -343,10 +365,15 @@ export default function App() {
     pendingRoll.current = null;
   }
   function skip() {
-    if (!busy.current) return;
-    commitRoll();
-    busy.current = false;
-    setPhase("idle");
+    if (!busy.current || skipRequested.current) return;
+    skipRequested.current = true;
+    const left = remaining(ROLL_TIMING.idle);
+    playback.current = {
+      at: performance.now(),
+      elapsed: ROLL_TIMING.idle - left,
+      rate: Math.max(1, left / 1000),
+    };
+    setFastForwarding(true);
   }
   function roll() {
     if (busy.current || modal) return;
@@ -357,7 +384,9 @@ export default function App() {
       busy.current = false;
       return;
     }
-    rollStartedAt.current = performance.now();
+    playback.current = { at: performance.now(), elapsed: 0, rate: 1 };
+    skipRequested.current = false;
+    setFastForwarding(false);
     setPhase("rolling");
   }
   function buy(id: DieId) {
