@@ -51,3 +51,9 @@ Validation now includes 16 desktop/mobile browser checks, including on-screen di
 Dice tumble, show their faces, fly into a sum, then reveal earned Dicecoin. The reward flies from the result into the wallet; the displayed balance increases on arrival. The wallet opens the shop, replacing the separate dice button. The level has no comparison symbol.
 
 The sequence prevents overlapping rolls and purchases. Complete results are saved once before presentation finishes, so a refresh during flight preserves the reward without duplicating it. Reduced-motion mode completes immediately. Six new desktop/mobile checks cover win/loss sequence ordering, delayed wallet credit, and refreshing during the flight, bringing the browser suite to 22 checks.
+
+## Distinct dice and simpler board — #13
+
+LEVEL and its number share one horizontal line at the existing 11px label size. Removed the dice count, per-die quantity badges, result captions, and prompts between the pool and Roll. The numerical total stays visible within the pool after the animation.
+
+Added shared vector shapes to the main pool and shop: coin, triangular prism, pyramid, cube, octahedron, trapezohedron, dodecahedron, icosahedron, and faceted sphere. Numeric faces, dice flights, coin collection, prices, rules, and save compatibility are preserved. Browser journeys verify all nine distinct shapes, the small horizontal level label, absent captions, and the total remaining visible after completion.

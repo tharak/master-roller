@@ -48,8 +48,8 @@ test("starting journey, purchases, reload, and confirmed reset", async ({
   await expect(
     page
       .getByRole("region", { name: "Your collection" })
-      .getByText("×2", { exact: true }),
-  ).toBeVisible();
+      .getByLabel("d2 rolled 1", { exact: true }),
+  ).toHaveCount(2);
   await page
     .getByRole("button", { name: "Reset progress", exact: true })
     .click();
@@ -82,7 +82,7 @@ test("losing roll earns a d2; rapid taps cannot double resolve", async ({
       button.click();
       button.click();
     });
-  await expect(page.getByText("TRY AGAIN", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("roll-total")).toHaveText("0");
   await expect(page.getByLabel("10 Dicecoin", { exact: true })).toBeVisible();
   await expect(page.getByTestId("target")).toHaveText("1");
   await section(page, "Dice shop");
@@ -122,20 +122,25 @@ test("all test offers grant rewards and are clearly simulated", async ({
   }
   await page.getByRole("button", { name: "Close test purchases" }).click();
   await section(page, "Play");
+  const shapes = await page
+    .getByRole("region", { name: "Your collection" })
+    .locator("svg[data-die-shape]")
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("data-die-shape")),
+    );
+  expect(new Set(shapes).size).toBe(9);
+  expect(shapes).toContain("coin");
+  expect(shapes).toContain("pyramid");
   await expect(
-    page
-      .getByRole("region", { name: "Your collection" })
-      .getByText("10 dice", { exact: true }),
-  ).toBeVisible();
+    page.getByRole("region", { name: "Your collection" }),
+  ).toHaveAttribute("aria-description", "10 dice");
   await page.reload();
   await expect(
     page.getByLabel("10000 Dicecoin", { exact: true }),
   ).toBeVisible();
   await expect(
-    page
-      .getByRole("region", { name: "Your collection" })
-      .getByText("10 dice", { exact: true }),
-  ).toBeVisible();
+    page.getByRole("region", { name: "Your collection" }),
+  ).toHaveAttribute("aria-description", "10 dice");
 });
 test("invalid save offers recovery without silently overwriting it", async ({
   page,
@@ -216,6 +221,15 @@ test("dice are on the main screen and show each rolled face", async ({
   });
   await page.goto("./");
   const dice = page.getByRole("region", { name: "Your collection" });
+  await expect(page.locator(".level-label")).toHaveCSS("font-size", "11px");
+  await expect(page.locator(".target-value")).toHaveCSS("font-size", "11px");
+  const labelBounds = await page.locator(".level-label").boundingBox();
+  const levelBounds = await page.getByTestId("target").boundingBox();
+  expect(Math.abs(labelBounds!.y - levelBounds!.y)).toBeLessThan(2);
+  await expect(
+    page.locator(".dice-count, .result-area, .ready-label, .toast"),
+  ).toHaveCount(0);
+  await expect(dice.locator("svg[data-die-shape=coin]")).toBeVisible();
   await expect(
     dice.getByLabel("d2 not rolled yet", { exact: true }),
   ).toBeVisible();
@@ -237,6 +251,11 @@ test("dice are on the main screen and show each rolled face", async ({
     .click();
   await expect(dice.getByLabel("d2 rolled 1", { exact: true })).toHaveCount(2);
   await expect(page.getByTestId("roll-total")).toHaveText("2");
+  await expect(
+    page.getByRole("region", { name: "Roll arena" }),
+  ).toHaveAttribute("data-phase", "idle");
+  await expect(page.getByTestId("roll-total")).toBeVisible();
+  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "1");
 });
 
 test("large collections still roll every die and expose all die types", async ({
@@ -276,7 +295,9 @@ test("large collections still roll every die and expose all die types", async ({
   await expect(
     page.getByLabel("d100 rolled 100", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("+44", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Your collection" }),
+  ).toHaveAttribute("aria-description", "51 dice");
 });
 
 for (const scenario of [
