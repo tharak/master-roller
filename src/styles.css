@@ -530,12 +530,6 @@ p {
   padding: 4px 5px;
   border-radius: 5px;
 }
-.die-range {
-  display: block;
-  font-size: 10px;
-  color: #9d9eb3;
-  margin: 2px 0 12px;
-}
 .buy-button {
   display: flex;
   align-items: center;
@@ -1105,9 +1099,14 @@ p {
   top: -6px;
   z-index: 2;
 }
-.die-range {
-  text-align: center;
-  margin: 8px 0 10px;
+.shop-die-type .shop-die-max {
+  font-size: 24px;
+}
+.shop-die-type.die-d4 .shop-die-max {
+  top: 64%;
+}
+.die-card .buy-button {
+  margin-top: 12px;
 }
 
 .play-die.die-d4 .die-value,
