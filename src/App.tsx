@@ -687,13 +687,16 @@ export default function App() {
                     aria-description={DIE_SHAPES[die.id]}
                   >
                     <DieShape id={die.id} />
+                    <strong
+                      className="die-value shop-die-max"
+                      aria-hidden="true"
+                    >
+                      {die.max}
+                    </strong>
                     <span className="owned">
                       ×{number(game.inventory[die.id])}
                     </span>
                   </div>
-                  <span className="die-range">
-                    {die.min}–{die.max}
-                  </span>
                   <button
                     className="buy-button"
                     aria-label={`Buy ${die.id} for ${die.price} Dicecoin`}
