@@ -1,0 +1,341 @@
+.economy-view {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  padding: 36px max(20px, calc((100vw - 1320px) / 2)) 60px;
+  background: radial-gradient(ellipse at 40% 0, #292940, #151925 65%);
+}
+.economy-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.analysis-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: none;
+  font-size: 13px;
+  color: #c7c8d8;
+}
+.analysis-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.analysis-nav button {
+  min-height: 44px;
+  background: #ffffff08;
+  border: 1px solid #ffffff1a;
+  color: #c7c8d8;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.eyebrow {
+  margin: 18px 0 9px;
+  letter-spacing: 2px;
+  font: 600 10px var(--display);
+  color: #bcabff;
+}
+.economy-header h1 {
+  font: 600 clamp(30px, 4vw, 44px) var(--display);
+  letter-spacing: -1.5px;
+  margin-bottom: 10px;
+}
+.economy-header p:not(.eyebrow),
+.analysis-card p {
+  color: #acafc7;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.draft-badge {
+  border: 1px solid #dbff7844;
+  border-radius: 99px;
+  padding: 10px 16px;
+  color: #dbff78;
+  background: #dbff780a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.analysis-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.analysis-card {
+  min-width: 0;
+  background: #202538;
+  border: 1px solid #ffffff12;
+  border-radius: 18px;
+  padding: 24px;
+}
+.analysis-card h2 {
+  margin: 0 0 6px;
+  font: 600 18px var(--display);
+  letter-spacing: -0.4px;
+}
+.analysis-charts {
+  display: grid;
+  gap: 20px;
+}
+.price-editor {
+  position: sticky;
+  top: 0;
+}
+.price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 15px 0;
+  border-bottom: 1px solid #ffffff0b;
+  font: 600 14px var(--display);
+}
+.price-row small {
+  display: block;
+  color: #9a9daf;
+  font:
+    400 10px "DM Sans",
+    sans-serif;
+  margin-top: 4px;
+}
+.price-row i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+.price-row input {
+  width: 90px;
+  min-height: 40px;
+  background: #141a2b;
+  color: #eef0fa;
+  border: 1px solid #ffffff26;
+  border-radius: 8px;
+  padding: 8px;
+  font: 500 14px var(--display);
+}
+.economy-view input:focus-visible {
+  outline: 2px solid #dbff78;
+  outline-offset: 3px;
+}
+.slot-price {
+  border: 0;
+  margin-bottom: 12px;
+}
+.price-editor .secondary-button {
+  width: 100%;
+  margin: 4px 0 16px;
+}
+.analysis-card .analysis-note {
+  font-size: 11px;
+  color: #9a9daf;
+  margin-top: 14px;
+}
+.chart-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.axis-choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 11px;
+  min-height: 35px;
+}
+.axis-choice input {
+  accent-color: #dbff78;
+}
+.chart-scroll,
+.table-scroll {
+  overflow-x: auto;
+}
+.chart-scroll svg {
+  display: block;
+  width: 100%;
+  min-width: 540px;
+  overflow: visible;
+  font-family: var(--display);
+}
+.chart-grid {
+  stroke: #ffffff0d;
+  stroke-width: 1;
+}
+.axis-label {
+  font-size: 11px;
+  fill: #9a9daf;
+}
+.range-name {
+  font-size: 14px;
+  fill: currentColor;
+  font-weight: 600;
+}
+.range-caption {
+  font-size: 12px;
+  fill: #c7c8d8;
+}
+.budget-label {
+  font-size: 11px;
+  font-weight: 500;
+}
+.stage-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+.stage-picker button,
+.upgrade-table button {
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid #ffffff1a;
+  border-radius: 8px;
+  background: #161d2f;
+  color: #c7c8d8;
+  font: 500 12px var(--display);
+}
+.stage-picker button[aria-pressed="true"],
+.upgrade-table button[aria-pressed="true"] {
+  border-color: #dbff7877;
+  color: #dbff78;
+  background: #dbff780b;
+}
+.analysis-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+.analysis-metrics p {
+  background: #151c2c;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 11px;
+}
+.analysis-metrics strong {
+  display: block;
+  color: #f1f2f8;
+  font: 600 23px var(--display);
+  margin-top: 5px;
+}
+.target-slider {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #b8bdd2;
+  font-size: 12px;
+  margin: 20px 0;
+}
+.target-slider input {
+  flex: 1;
+  min-width: 130px;
+  accent-color: #dbff78;
+}
+.target-slider span {
+  font-variant-numeric: tabular-nums;
+  color: #dbff78;
+}
+.income-card {
+  margin-top: 20px;
+}
+.simulation-status {
+  flex-shrink: 0;
+  min-height: 24px;
+  font-size: 11px;
+  color: #dbff78;
+}
+.upgrade-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 730px;
+  margin-top: 22px;
+  font-size: 12px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.upgrade-table caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.upgrade-table td,
+.upgrade-table th {
+  padding: 13px 12px;
+  border-bottom: 1px solid #ffffff10;
+}
+.upgrade-table thead {
+  color: #9a9daf;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.upgrade-table small {
+  display: block;
+  color: #9a9daf;
+  margin-top: 4px;
+}
+.selected-upgrade {
+  background: #dbff7805;
+}
+.wait-value {
+  color: #efad77;
+}
+@media (max-width: 800px) {
+  .analysis-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .analysis-layout > * {
+    width: 100%;
+  }
+  .analysis-charts {
+    order: 1;
+  }
+  .price-editor {
+    order: 2;
+  }
+  .price-editor {
+    position: static;
+  }
+  .economy-header {
+    align-items: start;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .price-row {
+    display: inline-flex;
+    width: calc(50% - 9px);
+    margin-right: 9px;
+  }
+  .price-row input {
+    width: 80px;
+  }
+  .chart-heading {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 420px) {
+  .economy-view {
+    padding: 18px 12px 40px;
+  }
+  .analysis-card {
+    padding: 18px 14px;
+  }
+  .price-row {
+    width: 100%;
+    margin: 0;
+  }
+  .analysis-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -275,9 +275,6 @@ p {
   stroke-opacity: 0.36;
   stroke-width: 1.1;
 }
-.die-d2 {
-  --die-color: #e6c576;
-}
 .die-value {
   position: absolute;
   left: 50%;
@@ -288,7 +285,6 @@ p {
   z-index: 1;
   text-shadow: 0 2px 3px #111622;
 }
-.die-d3 .die-value,
 .die-d6 .die-value {
   left: 35%;
   top: 59%;
@@ -472,6 +468,39 @@ p {
   font: 500 15px var(--display);
   margin-bottom: 20px;
 }
+.slot-shop {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: center;
+  background: #191f30;
+  border: 1px solid #ffffff12;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.slot-shop strong {
+  font: 600 13px var(--display);
+}
+.slot-shop p {
+  font-size: 11px;
+  color: #9a9daf;
+  margin-top: 6px;
+}
+.slot-shop .buy-button {
+  width: auto;
+  flex-shrink: 0;
+  gap: 10px;
+}
+.test-dice-grid button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.migration-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
 .shop-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -543,6 +572,7 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   margin-top: 16px;
 }
 .text-button {
@@ -1080,15 +1110,6 @@ p {
   margin: 8px 0 10px;
 }
 
-.play-die.die-d2,
-.result-die.die-d2 {
-  --die-color: #e6c576;
-}
-.play-die.die-d3 .die-value,
-.result-die.die-d3 .die-value {
-  left: 57%;
-  top: 43%;
-}
 .play-die.die-d4 .die-value,
 .result-die.die-d4 .die-value {
   top: 64%;

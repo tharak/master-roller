@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   buyDie,
+  buySlot,
   DICE,
   ECONOMY,
   newGame,
@@ -19,6 +20,7 @@ import {
 import { loadGame, saveGame, type SaveStatus } from "./storage";
 import DieShape, { DIE_SHAPES } from "./DieShape";
 import Shatter from "./Shatter";
+import EconomyView from "./EconomyView";
 
 type RollPhase =
   | "idle"
@@ -85,7 +87,7 @@ function Coin({ amount }: { amount?: number }) {
     </span>
   );
 }
-function initialSave() {
+function initialSave(): ReturnType<typeof loadGame> {
   try {
     return loadGame(window.localStorage);
   } catch {
@@ -95,6 +97,13 @@ function initialSave() {
 
 export default function App() {
   const [initial] = useState(initialSave);
+  const legacyBackup = useRef(initial.legacyBackup);
+  const [migrationNotice, setMigrationNotice] = useState(
+    Boolean(initial.legacyBackup),
+  );
+  const [economyView, setEconomyView] = useState(
+    window.location.hash === "#economy",
+  );
   const [game, setGame] = useState(initial.state);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(initial.status);
   const [phase, setPhase] = useState<RollPhase>("idle");
@@ -122,6 +131,14 @@ export default function App() {
     height: window.innerHeight,
   });
   const stats = poolStats(game);
+  const hasRoom = stats.count < game.slots;
+
+  useEffect(() => {
+    const changeView = () =>
+      setEconomyView(window.location.hash === "#economy");
+    window.addEventListener("hashchange", changeView);
+    return () => window.removeEventListener("hashchange", changeView);
+  }, []);
 
   useLayoutEffect(() => {
     if (!diceGrid.current) return;
@@ -135,14 +152,14 @@ export default function App() {
     });
     observer.observe(diceGrid.current);
     return () => observer.disconnect();
-  }, []);
+  }, [economyView]);
 
   useEffect(() => {
     if (saveStatus === "invalid") return;
     try {
-      setSaveStatus(
-        saveGame(window.localStorage, game) ? "saved" : "unavailable",
-      );
+      const saved = saveGame(window.localStorage, game, legacyBackup.current);
+      if (saved) legacyBackup.current = undefined;
+      setSaveStatus(saved ? "saved" : "unavailable");
     } catch {
       setSaveStatus("unavailable");
     }
@@ -340,7 +357,7 @@ export default function App() {
       dialog.current.close();
       previousFocus.current?.focus();
     }
-  }, [modal]);
+  }, [modal, economyView]);
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(() => setMessage(""), 3500);
@@ -361,6 +378,11 @@ export default function App() {
     if (busy.current) return;
     setGame((current) => buyDie(current, id));
     setMessage(`+1 ${id}`);
+  }
+  function purchaseSlot() {
+    if (busy.current) return;
+    setGame((current) => buySlot(current));
+    setMessage("+1 dice slot");
   }
   function testBuy(offer: TestOffer) {
     if (busy.current) return;
@@ -423,6 +445,8 @@ export default function App() {
     Math.min(visibleDice.length === 1 ? 126 : 82, availableSize * 0.85),
   );
 
+  if (economyView) return <EconomyView />;
+
   return (
     <div className="game-shell">
       <header className="hud">
@@ -458,6 +482,18 @@ export default function App() {
         </button>
       </header>
       <main className="game-main">
+        {migrationNotice && saveStatus !== "unavailable" && (
+          <p className="warning migration-notice" role="status">
+            Your d2/d3 became d4. Slots were added for your collection; level
+            and coins were kept.{" "}
+            <button
+              className="text-button"
+              onClick={() => setMigrationNotice(false)}
+            >
+              Dismiss update
+            </button>
+          </p>
+        )}
         {saveStatus === "unavailable" && (
           <p className="warning" role="status">
             Saving is unavailable. Progress won’t be kept.
@@ -619,6 +655,26 @@ export default function App() {
             >
               <Coin amount={game.balance} />
             </div>
+            <div className="slot-shop">
+              <div>
+                <strong>
+                  {stats.count} / {game.slots} slots used
+                </strong>
+                <p>
+                  {hasRoom
+                    ? `${game.slots - stats.count} empty ${game.slots - stats.count === 1 ? "slot" : "slots"}`
+                    : "Buy a slot to add another die."}
+                </p>
+              </div>
+              <button
+                className="buy-button"
+                aria-label={`Buy slot for ${ECONOMY.slotPrice} Dicecoin`}
+                disabled={rolling || game.balance < ECONOMY.slotPrice}
+                onClick={purchaseSlot}
+              >
+                + Slot <Coin amount={ECONOMY.slotPrice} />
+              </button>
+            </div>
             <div className="shop-grid">
               {DICE.map((die) => (
                 <article
@@ -641,7 +697,7 @@ export default function App() {
                   <button
                     className="buy-button"
                     aria-label={`Buy ${die.id} for ${die.price} Dicecoin`}
-                    disabled={rolling || game.balance < die.price}
+                    disabled={rolling || game.balance < die.price || !hasRoom}
                     onClick={() => buy(die.id)}
                   >
                     <Coin amount={die.price} />
@@ -654,6 +710,13 @@ export default function App() {
               <p className="purchase-feedback" role="status">
                 {message}
               </p>
+              <a
+                className="text-button"
+                href="#economy"
+                onClick={() => setModal(null)}
+              >
+                Economy lab
+              </a>
               <button className="text-button" onClick={() => setModal("test")}>
                 Test purchases
               </button>
@@ -663,6 +726,15 @@ export default function App() {
           <>
             <h2 id="modal-title">Test purchases</h2>
             <p className="modal-copy">No charge, no payment details.</p>
+            <p className="modal-copy">
+              {stats.count} / {game.slots} slots used.{" "}
+              {hasRoom
+                ? "Each test die uses one empty slot."
+                : "Buy more slots in the shop before adding test dice."}
+            </p>
+            <button className="text-button" onClick={() => setModal("shop")}>
+              Back to dice shop
+            </button>
             <button
               className="pack-button"
               aria-label="THE BIG COIN PACK: simulate 10,000 Dicecoin"
@@ -681,6 +753,7 @@ export default function App() {
                   className={die.color}
                   key={die.id}
                   aria-label={`Simulate purchase of ${die.id}`}
+                  disabled={!hasRoom || rolling}
                   onClick={() => testBuy(die.id)}
                 >
                   <strong>{die.id}</strong>
@@ -701,16 +774,24 @@ export default function App() {
               Roll all your dice. Reach the level number to advance.
             </p>
             <p className="help-rewards">
-              Win <strong>+20</strong>
-              <Coin /> · Lose <strong>+10</strong>
-              <Coin />
+              Earn your rolled total in <Coin /> Dicecoin, on wins and losses.
             </p>
             <p className="modal-copy">
-              Buy more dice with Dicecoin. Every die joins every roll.
+              Start with one d4 in one slot. Extra slots cost{" "}
+              {ECONOMY.slotPrice} Dicecoin each. Each owned die uses one slot
+              and joins every roll.
             </p>
             <p className="modal-copy">
-              d2: 0–1. Other dice: 1–their face count.
+              Dice roll 1 through their face count. Buy an empty slot before
+              adding another die.
             </p>
+            <a
+              className="text-button"
+              href="#economy"
+              onClick={() => setModal(null)}
+            >
+              Open economy lab ↗
+            </a>
             {last && (
               <details className="breakdown">
                 <summary>Last roll · {number(last.total)}</summary>
@@ -741,7 +822,7 @@ export default function App() {
             <p className="modal-copy">
               {modal === "recovery"
                 ? "This save could not be read. Replace it with a fresh game?"
-                : "Start over at level 1 with one d2 and zero Dicecoin?"}
+                : "Start over at level 1 with one d4, one slot and zero Dicecoin?"}
             </p>
             <div className="modal-buttons">
               {modal !== "recovery" && (

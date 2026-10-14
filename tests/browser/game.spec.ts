@@ -1,66 +1,85 @@
 import { expect, test, type Page } from "@playwright/test";
+import { DICE, newGame, type GameState } from "../../src/game";
 
+async function seed(page: Page, changes: Partial<GameState> = {}) {
+  await page.addInitScript(
+    (state) => {
+      if (localStorage.getItem("master-roller:save") === null)
+        localStorage.setItem("master-roller:save", JSON.stringify(state));
+    },
+    { ...newGame(), ...changes },
+  );
+}
+const rollButton = (page: Page) =>
+  page.getByRole("button", { name: /^Roll your (die|dice)$/ });
 async function section(page: Page, name: "Play" | "Dice shop") {
-  if (name === "Dice shop") {
+  if (name === "Dice shop")
     await page.getByRole("button", { name: /Dicecoin$/ }).click();
-  } else if (await page.getByRole("dialog").isVisible()) {
+  else if (await page.getByRole("dialog").isVisible())
     await page
       .getByRole("button", { name: "Close dice shop", exact: true })
       .click();
-  }
 }
-test("starting journey, purchases, reload, and confirmed reset", async ({
+async function resolveFaces(page: Page) {
+  await page.clock.fastForward(550);
+  await expect(page.locator(".arena")).toHaveAttribute("data-phase", "faces");
+  await page.clock.fastForward(280);
+  await expect(page.locator(".arena")).toHaveAttribute("data-phase", "total");
+}
+
+test("earned-money journey buys a slot and d6, reloads, and resets", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(() => {
     Math.random = () => 0.99;
   });
   await page.goto("./");
   await expect(page.getByTestId("target")).toHaveText("1");
   await expect(page.getByLabel("0 Dicecoin", { exact: true })).toBeVisible();
-  await section(page, "Dice shop");
   await expect(
-    page.getByRole("button", { name: "Buy d2 for 10 Dicecoin", exact: true }),
+    page.getByLabel("d4 not rolled yet", { exact: true }),
+  ).toBeVisible();
+  await section(page, "Dice shop");
+  await expect(page.getByText("1 / 1 slots used")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Buy d6 for 70 Dicecoin", exact: true }),
   ).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Buy d[23] / })).toHaveCount(0);
   await section(page, "Play");
-  await page
-    .getByRole("button", { name: "Roll your die", exact: true })
-    .click();
-  await expect(page.getByRole("button", { name: "Rolling…" })).toBeDisabled();
-  await expect(page.getByTestId("target")).toHaveText("2");
-  await expect(page.getByLabel("20 Dicecoin", { exact: true })).toBeVisible();
+  for (let count = 0; count < 30; count++) await rollButton(page).click();
+  await expect(page.getByTestId("target")).toHaveText("5");
+  await expect(page.getByLabel("120 Dicecoin", { exact: true })).toBeVisible();
   await section(page, "Dice shop");
+  const buyDie = page.getByRole("button", {
+    name: "Buy d6 for 70 Dicecoin",
+    exact: true,
+  });
+  await expect(buyDie).toBeDisabled(); // Money alone does not bypass capacity.
   await page
-    .getByRole("button", { name: "Buy d2 for 10 Dicecoin", exact: true })
+    .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
     .click();
-  await expect(page.getByLabel("10 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 / 2 slots used")).toBeVisible();
+  await buyDie.click();
+  await expect(page.getByLabel("0 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 / 2 slots used")).toBeVisible();
   await section(page, "Play");
-  await page
-    .getByRole("button", { name: "Roll your dice", exact: true })
-    .click();
-  await expect(page.getByTestId("target")).toHaveText("3");
-  await expect(page.getByLabel("30 Dicecoin", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Roll arena" }),
-  ).toHaveAttribute("data-phase", "idle");
-  await expect(page.getByTestId("roll-total")).toBeEmpty();
+  await rollButton(page).click();
+  await expect(page.getByTestId("target")).toHaveText("6");
+  await expect(page.getByLabel("10 Dicecoin", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByTestId("target")).toHaveText("3");
-  await expect(page.getByLabel("30 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("target")).toHaveText("6");
+  await expect(page.getByLabel("10 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("d4 rolled 4", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("d6 rolled 6", { exact: true })).toBeVisible();
   await expect(page.getByTestId("roll-total")).toBeEmpty();
-  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
-  await expect(
-    page
-      .getByRole("region", { name: "Your collection" })
-      .getByLabel("d2 rolled 1", { exact: true }),
-  ).toHaveCount(2);
   await page
     .getByRole("button", { name: "Reset progress", exact: true })
     .click();
   await page.getByRole("button", { name: "Keep playing" }).click();
-  await expect(page.getByTestId("target")).toHaveText("3");
+  await expect(page.getByTestId("target")).toHaveText("6");
   await page
     .getByRole("button", { name: "Reset progress", exact: true })
     .click();
@@ -69,35 +88,44 @@ test("starting journey, purchases, reload, and confirmed reset", async ({
     .getByRole("button", { name: "Reset progress" })
     .click();
   await expect(page.getByTestId("target")).toHaveText("1");
-  await expect(page.getByLabel("0 Dicecoin", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("master-roller:save")!),
+    ),
+  ).toMatchObject({
+    version: 2,
+    slots: 1,
+    balance: 0,
+    inventory: { d4: 1, d6: 0 },
+  });
   expect(errors).toEqual([]);
 });
-test("losing roll earns a d2; rapid taps cannot double resolve", async ({
+
+test("a loss earns its total and rapid taps cannot double resolve", async ({
   page,
 }) => {
+  await seed(page, { level: 5 });
   await page.addInitScript(() => {
     Math.random = () => 0;
   });
   await page.goto("./");
-  // Dispatch multiple taps in one turn to exercise the lock before React re-renders.
-  await page
-    .getByRole("button", { name: "Roll your die", exact: true })
-    .evaluate((element) => {
-      const button = element as HTMLButtonElement;
-      button.click();
-      button.click();
-      button.click();
-    });
-  await expect(page.getByTestId("roll-total")).toHaveText("0");
-  await expect(page.getByLabel("10 Dicecoin", { exact: true })).toBeVisible();
-  await expect(page.getByTestId("target")).toHaveText("1");
-  await section(page, "Dice shop");
-  await page
-    .getByRole("button", { name: "Buy d2 for 10 Dicecoin", exact: true })
-    .click();
-  await expect(page.getByLabel("0 Dicecoin", { exact: true })).toBeVisible();
+  await rollButton(page).evaluate((element) => {
+    const button = element as HTMLButtonElement;
+    button.click();
+    button.click();
+    button.click();
+  });
+  await expect(page.getByTestId("roll-total")).toHaveText("1");
+  await expect(page.getByLabel("1 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("target")).toHaveText("5");
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
+    ),
+  ).toBe(1);
 });
-test("all test offers grant rewards and are clearly simulated", async ({
+
+test("simulated offers are free and respect purchased slots", async ({
   page,
 }) => {
   await page.goto("./");
@@ -107,48 +135,74 @@ test("all test offers grant rewards and are clearly simulated", async ({
     .click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText(/No charge, no payment details/)).toBeVisible();
-  await dialog.getByRole("button", { name: /THE BIG COIN PACK/ }).click();
   await expect(
-    page.getByLabel("10000 Dicecoin", { exact: true }),
-  ).toBeVisible();
-  for (const die of [
-    "d2",
-    "d3",
-    "d4",
-    "d6",
-    "d8",
-    "d10",
-    "d12",
-    "d20",
-    "d100",
-  ]) {
-    await dialog
-      .getByRole("button", { name: `Simulate purchase of ${die}`, exact: true })
+    dialog.getByRole("button", {
+      name: "Simulate purchase of d6",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole("button", { name: /Simulate purchase of d[23]$/ }),
+  ).toHaveCount(0);
+  await dialog.getByRole("button", { name: /THE BIG COIN PACK/ }).click();
+  await page.getByRole("button", { name: "Back to dice shop" }).click();
+  for (let count = 0; count < 7; count++)
+    await page
+      .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
       .click();
-  }
+  await page
+    .getByRole("button", { name: "Test purchases", exact: true })
+    .click();
+  for (const die of DICE)
+    await dialog
+      .getByRole("button", {
+        name: `Simulate purchase of ${die.id}`,
+        exact: true,
+      })
+      .click();
+  await expect(
+    dialog.getByRole("button", {
+      name: "Simulate purchase of d4",
+      exact: true,
+    }),
+  ).toBeDisabled();
   await page.getByRole("button", { name: "Close test purchases" }).click();
-  await section(page, "Play");
-  const shapes = await page
-    .getByRole("region", { name: "Your collection" })
+  const dice = page.getByRole("region", { name: "Your collection" });
+  const shapes = await dice
     .locator("svg[data-die-shape]")
     .evaluateAll((elements) =>
       elements.map((element) => element.getAttribute("data-die-shape")),
     );
-  expect(new Set(shapes).size).toBe(9);
-  expect(shapes).toContain("coin");
-  expect(shapes).toContain("pyramid");
-  await expect(
-    page.getByRole("region", { name: "Your collection" }),
-  ).toHaveAttribute("aria-description", "10 dice");
+  expect(new Set(shapes).size).toBe(7);
+  expect(shapes).not.toContain("coin");
+  expect(shapes).not.toContain("triangular prism");
+  await expect(dice).toHaveAttribute("aria-description", "8 dice");
   await page.reload();
-  await expect(
-    page.getByLabel("10000 Dicecoin", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Your collection" }),
-  ).toHaveAttribute("aria-description", "10 dice");
+  await expect(page.getByLabel("9650 Dicecoin", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("master-roller:save")!).slots,
+    ),
+  ).toBe(8);
 });
-test("invalid save offers recovery without silently overwriting it", async ({
+
+test("rapid slot taps cannot spend unavailable money", async ({ page }) => {
+  await seed(page, { balance: 50 });
+  await page.goto("./");
+  await section(page, "Dice shop");
+  await page
+    .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
+    .evaluate((element) => {
+      const button = element as HTMLButtonElement;
+      button.click();
+      button.click();
+      button.click();
+    });
+  await expect(page.getByText("1 / 2 slots used")).toBeVisible();
+  await expect(page.getByLabel("0 Dicecoin", { exact: true })).toBeVisible();
+});
+
+test("invalid save requires explicit recovery and remains untouched", async ({
   page,
 }) => {
   await page.addInitScript(() =>
@@ -162,30 +216,27 @@ test("invalid save offers recovery without silently overwriting it", async ({
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Start new game" }).click();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
   expect(
-    JSON.parse(
-      (await page.evaluate(() => localStorage.getItem("master-roller:save")))!,
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("master-roller:save")!),
     ),
-  ).toMatchObject({ version: 1, level: 1, balance: 0 });
+  ).toMatchObject({ version: 2, slots: 1, level: 1, balance: 0 });
 });
-test("storage failure is visible and play remains available", async ({
-  page,
-}) => {
+
+test("storage failure stays visible while play works", async ({ page }) => {
   await page.addInitScript(() => {
     Storage.prototype.setItem = () => {
-      throw new Error("Storage blocked");
+      throw new Error("blocked");
     };
     Math.random = () => 0.99;
   });
   await page.goto("./");
   await expect(page.getByText(/Saving is unavailable/)).toBeVisible();
-  await page
-    .getByRole("button", { name: "Roll your die", exact: true })
-    .click();
+  await rollButton(page).click();
   await expect(page.getByTestId("target")).toHaveText("2");
 });
-test("fits narrow screens, keyboard controls work, and reduced motion resolves rolls", async ({
+
+test("narrow screens, keyboard controls and reduced motion work", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 740 });
@@ -196,35 +247,34 @@ test("fits narrow screens, keyboard controls work, and reduced motion resolves r
   await page.goto("./");
   expect(
     await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
+      () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  const roll = page.getByRole("button", { name: "Roll your die", exact: true });
-  await roll.focus();
+  await rollButton(page).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("target")).toHaveText("2");
   await expect(page.getByTestId("roll-total")).toBeEmpty();
   await expect(page.locator(".arena [role=status]")).toContainText(
-    "Total 1. Level cleared. Earned 20 Dicecoin.",
+    "Total 4. Level cleared. Earned 4 Dicecoin.",
   );
   await section(page, "Dice shop");
   expect(
     await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
+      () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
   await page
     .getByRole("button", { name: "Test purchases", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByRole("button", { name: /Dicecoin$/ })).toBeFocused();
 });
 
-test("dice are on the main screen and show each rolled face", async ({
+test("dice have shapes and numeric faces without type labels", async ({
   page,
 }) => {
+  await seed(page, { balance: 120 });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => {
     Math.random = () => 0.99;
@@ -233,70 +283,50 @@ test("dice are on the main screen and show each rolled face", async ({
   const dice = page.getByRole("region", { name: "Your collection" });
   await expect(page.locator(".level-label")).toHaveCSS("font-size", "11px");
   await expect(page.locator(".target-value")).toHaveCSS("font-size", "11px");
-  const labelBounds = await page.locator(".level-label").boundingBox();
-  const levelBounds = await page.getByTestId("target").boundingBox();
-  expect(Math.abs(labelBounds!.y - levelBounds!.y)).toBeLessThan(2);
+  const label = await page.locator(".level-label").boundingBox(),
+    level = await page.getByTestId("target").boundingBox();
+  expect(Math.abs(label!.y - level!.y)).toBeLessThan(2);
   await expect(
-    page.locator(".dice-count, .result-area, .ready-label, .toast"),
+    page.locator(".die-type, .dice-count, .result-area, .ready-label, .toast"),
   ).toHaveCount(0);
-  await expect(dice.locator("svg[data-die-shape=coin]")).toBeVisible();
-  await expect(
-    dice.getByLabel("d2 not rolled yet", { exact: true }),
-  ).toBeVisible();
-  const roll = page.getByRole("button", { name: "Roll your die", exact: true });
-  const bounds = await roll.boundingBox();
+  await expect(dice.locator("svg[data-die-shape=pyramid]")).toBeVisible();
+  const bounds = await rollButton(page).boundingBox();
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
-  await roll.click();
-  await expect(dice.getByLabel("d2 rolled 1", { exact: true })).toBeVisible();
+  await rollButton(page).click();
+  await expect(dice.getByLabel("d4 rolled 4", { exact: true })).toBeVisible();
   await section(page, "Dice shop");
   await page
-    .getByRole("button", { name: "Buy d2 for 10 Dicecoin", exact: true })
+    .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Buy d6 for 70 Dicecoin", exact: true })
     .click();
   await section(page, "Play");
   await expect(
-    dice.getByLabel("d2 not rolled yet", { exact: true }),
+    dice.getByLabel("d6 not rolled yet", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Roll your dice", exact: true })
-    .click();
-  await expect(dice.getByLabel("d2 rolled 1", { exact: true })).toHaveCount(2);
-  await expect(page.getByTestId("roll-total")).toHaveText("2");
-  await expect(
-    page.getByRole("region", { name: "Roll arena" }),
-  ).toHaveAttribute("data-phase", "idle");
+  await rollButton(page).click();
+  await expect(page.getByTestId("roll-total")).toHaveText("10");
+  await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
   await expect(page.getByTestId("roll-total")).toBeEmpty();
-  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
 });
 
-test("pool fills the viewport, resizes dense dice, and keeps overlays usable", async ({
+test("full-screen dense pool resizes and overlay controls remain usable", async ({
   page,
 }) => {
+  await seed(page, {
+    slots: 42,
+    balance: 100,
+    inventory: Object.fromEntries(
+      DICE.map((die) => [die.id, 6]),
+    ) as GameState["inventory"],
+  });
   await page.addInitScript(() => {
-    localStorage.setItem(
-      "master-roller:save",
-      JSON.stringify({
-        version: 1,
-        level: 1,
-        balance: 100,
-        lastRoll: null,
-        inventory: {
-          d2: 6,
-          d3: 6,
-          d4: 6,
-          d6: 6,
-          d8: 6,
-          d10: 6,
-          d12: 6,
-          d20: 6,
-          d100: 6,
-        },
-      }),
-    );
+    Math.random = () => 0.99;
   });
   await page.goto("./");
-  await expect(page.locator(".play-die")).toHaveCount(54);
-  // Wait for entry animations before measuring the settled dice.
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator(".play-die")).toHaveCount(42);
   for (const viewport of [
     { width: 1440, height: 1000 },
     { width: 390, height: 844 },
@@ -305,45 +335,42 @@ test("pool fills the viewport, resizes dense dice, and keeps overlays usable", a
   ]) {
     await page.setViewportSize(viewport);
     await expect
-      .poll(async () =>
+      .poll(() =>
         page.getByRole("region", { name: "Your collection" }).boundingBox(),
       )
       .toEqual({ x: 0, y: 0, ...viewport });
     await expect
       .poll(() =>
         page.evaluate(() => {
-          const bounds = Array.from(
+          const dice = Array.from(
             document.querySelectorAll(".play-die"),
-            (die) => die.getBoundingClientRect(),
+            (element) => element.getBoundingClientRect(),
           );
           const level = document
-            .querySelector(".level-target")!
-            .getBoundingClientRect();
-          const controls = document
-            .querySelector(".controls")!
-            .getBoundingClientRect();
-          const shell = document
-            .querySelector(".game-shell")!
-            .getBoundingClientRect();
-          return bounds.every(
+              .querySelector(".level-target")!
+              .getBoundingClientRect(),
+            controls = document
+              .querySelector(".controls")!
+              .getBoundingClientRect();
+          return dice.every(
             (die) =>
-              die.left >= shell.left &&
-              die.right <= shell.right &&
+              die.left >= 0 &&
+              die.right <= innerWidth &&
               die.top >= level.bottom &&
               die.bottom <= controls.top,
           );
         }),
       )
       .toBe(true);
-    const spread = await page.locator(".play-die").evaluateAll((dice) => {
-      const bounds = dice.map((die) => die.getBoundingClientRect());
+    const spread = await page.locator(".play-die").evaluateAll((elements) => {
+      const dice = elements.map((element) => element.getBoundingClientRect());
       return {
         width:
-          Math.max(...bounds.map((die) => die.right)) -
-          Math.min(...bounds.map((die) => die.left)),
+          Math.max(...dice.map((die) => die.right)) -
+          Math.min(...dice.map((die) => die.left)),
         height:
-          Math.max(...bounds.map((die) => die.bottom)) -
-          Math.min(...bounds.map((die) => die.top)),
+          Math.max(...dice.map((die) => die.bottom)) -
+          Math.min(...dice.map((die) => die.top)),
       };
     });
     expect(spread.width).toBeGreaterThan(viewport.width * 0.6);
@@ -355,62 +382,39 @@ test("pool fills the viewport, resizes dense dice, and keeps overlays usable", a
           document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    const rollBounds = await page.locator(".roll-button").boundingBox();
-    expect(rollBounds!.width).toBeCloseTo(Math.min(480, viewport.width - 32));
+    expect((await rollButton(page).boundingBox())!.width).toBeCloseTo(
+      Math.min(480, viewport.width - 32),
+    );
     await section(page, "Dice shop");
     await expect(page.getByRole("dialog", { name: "Dice shop" })).toBeVisible();
     await section(page, "Play");
     await page.getByRole("button", { name: "How to play" }).click();
-    await expect(
-      page.getByRole("dialog", { name: "How to play" }),
-    ).toBeVisible();
     await page.keyboard.press("Escape");
     await page
       .getByRole("button", { name: "Reset progress", exact: true })
       .click();
     await page.getByRole("button", { name: "Keep playing" }).click();
   }
-  await page
-    .getByRole("button", { name: "Roll your dice", exact: true })
-    .click();
-  await expect(page.getByLabel("120 Dicecoin", { exact: true })).toBeVisible();
-  await expect(page.getByTestId("roll-total")).toBeEmpty();
+  await rollButton(page).click();
+  await expect(page.getByLabel("1060 Dicecoin", { exact: true })).toBeVisible();
 });
 
-test("large collections still roll every die and expose all die types", async ({
+test("all owned dice contribute even beyond the visual six-copy cap", async ({
   page,
 }) => {
+  await seed(page, {
+    slots: 51,
+    inventory: { ...newGame().inventory, d4: 50, d100: 1 },
+  });
   await page.addInitScript(() => {
-    localStorage.setItem(
-      "master-roller:save",
-      JSON.stringify({
-        version: 1,
-        level: 1,
-        balance: 0,
-        lastRoll: null,
-        inventory: {
-          d2: 50,
-          d3: 0,
-          d4: 0,
-          d6: 0,
-          d8: 0,
-          d10: 0,
-          d12: 0,
-          d20: 0,
-          d100: 1,
-        },
-      }),
-    );
     Math.random = () => 0.99;
   });
   await page.goto("./");
   await expect(
     page.getByLabel("d100 not rolled yet", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Roll your dice", exact: true })
-    .click();
-  await expect(page.getByTestId("roll-total")).toHaveText("150");
+  await rollButton(page).click();
+  await expect(page.getByTestId("roll-total")).toHaveText("300");
   await expect(
     page.getByLabel("d100 rolled 100", { exact: true }),
   ).toBeVisible();
@@ -424,88 +428,66 @@ for (const scenario of [
     name: "exact-target win",
     random: 0.99,
     count: 1,
-    face: 1,
-    earned: 20,
-    total: 1,
-    level: 2,
+    face: 4,
+    total: 4,
+    startLevel: 4,
+    level: 5,
+    won: true,
   },
   {
     name: "overshoot win",
     random: 0.99,
     count: 2,
-    face: 1,
-    earned: 20,
-    total: 2,
+    face: 4,
+    total: 8,
+    startLevel: 1,
     level: 2,
+    won: true,
   },
   {
     name: "loss",
     random: 0,
     count: 1,
-    face: 0,
-    earned: 10,
-    total: 0,
-    level: 1,
+    face: 1,
+    total: 1,
+    startLevel: 5,
+    level: 5,
+    won: false,
   },
 ]) {
-  test(`${scenario.name}: result die hits the level, breaks the right target, then credits coins`, async ({
+  test(`${scenario.name}: result die strikes the level then pays its rolled total on arrival`, async ({
     page,
   }) => {
+    await seed(page, {
+      level: scenario.startLevel,
+      slots: scenario.count,
+      inventory: { ...newGame().inventory, d4: scenario.count },
+    });
     await page.clock.install();
     await page.clock.pauseAt(new Date());
-    await page.addInitScript(({ random, count }) => {
+    await page.addInitScript((random) => {
       Math.random = () => random;
-      localStorage.setItem(
-        "master-roller:save",
-        JSON.stringify({
-          version: 1,
-          level: 1,
-          balance: 0,
-          lastRoll: null,
-          inventory: {
-            d2: count,
-            d3: 0,
-            d4: 0,
-            d6: 0,
-            d8: 0,
-            d10: 0,
-            d12: 0,
-            d20: 0,
-            d100: 0,
-          },
-        }),
-      );
-    }, scenario);
+    }, scenario.random);
     await page.goto("./");
-    const arena = page.getByRole("region", { name: "Roll arena" });
-    const wallet = page.getByRole("button", {
-      name: "0 Dicecoin",
-      exact: true,
-    });
-    await expect(page.locator(".target-value")).toHaveText("1");
-    await expect(page.locator(".controls button")).toHaveCount(1);
+    const arena = page.locator(".arena"),
+      wallet = page.getByRole("button", { name: "0 Dicecoin", exact: true });
     await wallet.click();
-    await expect(page.getByRole("dialog", { name: "Dice shop" })).toBeVisible();
     await section(page, "Play");
-    await page
-      .getByRole("button", {
-        name: scenario.count === 1 ? "Roll your die" : "Roll your dice",
-        exact: true,
-      })
-      .click();
+    await rollButton(page).click();
     await page.clock.fastForward(550);
     await expect(arena).toHaveAttribute("data-phase", "faces");
     await expect(
-      page.getByLabel(`d2 rolled ${scenario.face}`, { exact: true }),
+      page.getByLabel(`d4 rolled ${scenario.face}`, { exact: true }),
     ).toHaveCount(scenario.count);
     await expect(wallet).toBeDisabled();
-    await expect(page.getByTestId("target")).toHaveText("1");
-    // Complete state is durable during the visual sequence, but the visible money is withheld.
+    await expect(page.getByTestId("target")).toHaveText(
+      String(scenario.startLevel),
+    );
     expect(
       await page.evaluate(
         () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
       ),
-    ).toBe(scenario.earned);
+    ).toBe(scenario.total);
     await page.clock.fastForward(280);
     await expect(arena).toHaveAttribute("data-phase", "gathering");
     expect(
@@ -517,31 +499,25 @@ for (const scenario of [
     ).toBe(true);
     await expect(arena).toHaveAttribute("data-phase", "total");
     await expect(page.locator(".play-die").first()).toHaveCSS("opacity", "0");
-    await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "1");
-    await expect(page.locator(".sum-burst strong")).toHaveText(
+    await expect(page.getByTestId("roll-total")).toHaveText(
       String(scenario.total),
     );
     await expect(page.locator(".sum-burst .result-die svg")).toHaveAttribute(
       "data-die-shape",
-      "coin",
+      "pyramid",
     );
-    await expect(wallet).toBeVisible();
     await page.clock.fastForward(450);
     await expect(arena).toHaveAttribute("data-phase", "targeting");
-    await expect(page.locator(".total-flight .result-die")).toContainText(
-      String(scenario.total),
-    );
-    // Inspect the actual end position before letting the flight finish.
     const collision = await page
       .locator(".total-flight")
       .evaluate((element) => {
         const animation = element.getAnimations()[0];
         animation.pause();
         animation.currentTime = 600;
-        const die = element.getBoundingClientRect();
-        const level = document
-          .querySelector(".level-target > .level-copy")!
-          .getBoundingClientRect();
+        const die = element.getBoundingClientRect(),
+          level = document
+            .querySelector(".level-target > .level-copy")!
+            .getBoundingClientRect();
         const result = {
           centerGap: Math.abs(
             die.left + die.width / 2 - level.left - level.width / 2,
@@ -554,36 +530,30 @@ for (const scenario of [
     expect(collision.centerGap).toBeLessThan(1);
     expect(collision.edgeGap).toBeLessThan(1);
     await expect(arena).toHaveAttribute("data-phase", "impact");
-    await expect(page.locator(".total-flight")).toHaveCount(0);
     await expect(page.locator(".impact-shard")).toHaveCount(12);
-    await expect(page.getByTestId("target")).toHaveText("1");
-    if (scenario.earned === 20) {
-      await expect(page.locator(".level-shatter")).toContainText("LEVEL");
-      await expect(page.locator(".level-target > .level-copy")).toHaveCSS(
-        "opacity",
-        "0",
-      );
-    } else {
-      await expect(page.locator(".total-shatter .result-die")).toHaveCount(12);
-      await expect(page.locator(".level-target > .level-copy")).toHaveCSS(
-        "opacity",
-        "1",
-      );
-    }
+    await expect(page.getByTestId("target")).toHaveText(
+      String(scenario.startLevel),
+    );
+    await expect(page.locator(".level-target > .level-copy")).toHaveCSS(
+      "opacity",
+      scenario.won ? "0" : "1",
+    );
+    await expect(
+      page.locator(scenario.won ? ".level-shatter" : ".total-shatter"),
+    ).toHaveCount(1);
     await expect(wallet).toBeVisible();
     await expect(wallet).toBeDisabled();
     await page.clock.fastForward(500);
-    if (scenario.earned === 20) {
+    if (scenario.won) {
       await expect(arena).toHaveAttribute("data-phase", "leveling");
-      await expect(page.getByTestId("target")).toHaveText("2");
-      await expect(wallet).toBeVisible();
+      await expect(page.getByTestId("target")).toHaveText(
+        String(scenario.level),
+      );
       await page.clock.fastForward(300);
     }
     await expect(arena).toHaveAttribute("data-phase", "reward");
-    await expect(page.locator(".impact-shatter")).toHaveCount(0);
-    await expect(page.getByTestId("roll-total")).toBeEmpty();
     await expect(page.locator(".earned-reward")).toContainText(
-      `+${scenario.earned}`,
+      `+${scenario.total}`,
     );
     await page.clock.fastForward(500);
     await expect(arena).toHaveAttribute("data-phase", "crediting");
@@ -592,72 +562,42 @@ for (const scenario of [
     await expect(arena).toHaveAttribute("data-phase", "collected");
     await expect(
       page.getByRole("button", {
-        name: `${scenario.earned} Dicecoin`,
+        name: `${scenario.total} Dicecoin`,
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByTestId("target")).toHaveText(String(scenario.level));
-    await expect(page.getByTestId("reward-flight")).toHaveCount(0);
     await page.clock.fastForward(220);
     await expect(arena).toHaveAttribute("data-phase", "idle");
     await expect(page.getByTestId("roll-total")).toBeEmpty();
-    await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
     await expect(
-      page.getByLabel(`d2 rolled ${scenario.face}`, { exact: true }),
-    ).toHaveCount(scenario.count);
-    await expect(
-      page.getByRole("button", {
-        name: scenario.count === 1 ? "Roll your die" : "Roll your dice",
-        exact: true,
-      }),
-    ).toBeEnabled();
+      page.locator(".total-flight, .impact-shatter, .reward-flight"),
+    ).toHaveCount(0);
+    await expect(rollButton(page)).toBeEnabled();
   });
 }
 
-test("gathered total uses the highest-sided owned die and follows the resized level", async ({
+test("highest-sided result die follows the level after resizing", async ({
   page,
 }) => {
+  await seed(page, {
+    slots: 4,
+    inventory: { ...newGame().inventory, d4: 2, d6: 1, d20: 1 },
+  });
   await page.clock.install();
   await page.clock.pauseAt(new Date());
   await page.addInitScript(() => {
     Math.random = () => 0.99;
-    localStorage.setItem(
-      "master-roller:save",
-      JSON.stringify({
-        version: 1,
-        level: 1,
-        balance: 0,
-        lastRoll: null,
-        inventory: {
-          d2: 2,
-          d3: 0,
-          d4: 1,
-          d6: 0,
-          d8: 0,
-          d10: 0,
-          d12: 0,
-          d20: 1,
-          d100: 0,
-        },
-      }),
-    );
   });
   await page.goto("./");
-  const arena = page.getByRole("region", { name: "Roll arena" });
-  await page
-    .getByRole("button", { name: "Roll your dice", exact: true })
-    .click();
-  await page.clock.fastForward(550);
-  await page.clock.fastForward(280);
-  await expect(arena).toHaveAttribute("data-phase", "total");
-  await expect(page.getByTestId("roll-total")).toHaveText("26");
+  await rollButton(page).click();
+  await resolveFaces(page);
+  await expect(page.getByTestId("roll-total")).toHaveText("34");
   await expect(page.locator(".sum-burst .result-die svg")).toHaveAttribute(
     "data-die-shape",
     "icosahedron",
   );
-  await expect(page.locator(".sum-burst .result-die")).toHaveText("26");
-  const bounds = await page.locator(".sum-burst .result-die").boundingBox();
-  const viewport = page.viewportSize()!;
+  const bounds = await page.locator(".sum-burst .result-die").boundingBox(),
+    viewport = page.viewportSize()!;
   expect(
     Math.abs(bounds!.x + bounds!.width / 2 - viewport.width / 2),
   ).toBeLessThan(1);
@@ -665,24 +605,25 @@ test("gathered total uses the highest-sided owned die and follows the resized le
     Math.abs(bounds!.y + bounds!.height / 2 - viewport.height / 2),
   ).toBeLessThan(1);
   await page.clock.fastForward(450);
-  await expect(arena).toHaveAttribute("data-phase", "targeting");
+  await expect(page.locator(".arena")).toHaveAttribute(
+    "data-phase",
+    "targeting",
+  );
   await page.setViewportSize({ width: 844, height: 390 });
-  await expect(arena).toHaveAttribute("data-phase", "impact");
-  const shards = await page.locator(".level-shatter").boundingBox();
-  const target = await page
-    .locator(".level-target > .level-copy")
-    .boundingBox();
+  await expect(page.locator(".arena")).toHaveAttribute("data-phase", "impact");
+  const shards = await page.locator(".level-shatter").boundingBox(),
+    target = await page.locator(".level-target > .level-copy").boundingBox();
   expect(shards!.x).toBeCloseTo(target!.x, 0);
   expect(shards!.y).toBeCloseTo(target!.y, 0);
   expect(
     await page.evaluate(
       () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
     ),
-  ).toBe(20);
+  ).toBe(34);
 });
 
-for (const phase of ["targeting", "impact"] as const) {
-  test(`refresh during ${phase} restores one result and clears the visual sequence`, async ({
+for (const phase of ["targeting", "impact", "crediting"] as const) {
+  test(`refresh during ${phase} keeps one reward and clears animations`, async ({
     page,
   }) => {
     await page.clock.install();
@@ -691,20 +632,24 @@ for (const phase of ["targeting", "impact"] as const) {
       Math.random = () => 0.99;
     });
     await page.goto("./");
-    const arena = page.getByRole("region", { name: "Roll arena" });
-    await page
-      .getByRole("button", { name: "Roll your die", exact: true })
-      .click();
-    await page.clock.fastForward(550);
-    await page.clock.fastForward(280);
-    await expect(arena).toHaveAttribute("data-phase", "total");
+    await rollButton(page).click();
+    await resolveFaces(page);
     await page.clock.fastForward(450);
-    await expect(arena).toHaveAttribute("data-phase", phase);
+    if (phase === "crediting") {
+      await expect(page.locator(".arena")).toHaveAttribute(
+        "data-phase",
+        "impact",
+      );
+      await page.clock.fastForward(500);
+      await page.clock.fastForward(300);
+      await page.clock.fastForward(500);
+    }
+    await expect(page.locator(".arena")).toHaveAttribute("data-phase", phase);
     await page.reload();
-    await expect(arena).toHaveAttribute("data-phase", "idle");
+    await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
     await expect(page.getByTestId("target")).toHaveText("2");
     await expect(
-      page.getByRole("button", { name: "20 Dicecoin", exact: true }),
+      page.getByRole("button", { name: "4 Dicecoin", exact: true }),
     ).toBeVisible();
     await expect(page.getByTestId("roll-total")).toBeEmpty();
     await expect(
@@ -715,52 +660,73 @@ for (const phase of ["targeting", "impact"] as const) {
       await page.evaluate(
         () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
       ),
-    ).toBe(20);
+    ).toBe(4);
     await page.getByRole("button", { name: "How to play" }).click();
-    await expect(
-      page.getByRole("dialog").getByText("Last roll · 1"),
-    ).toBeVisible();
+    await expect(page.getByText("Last roll · 4")).toBeVisible();
   });
 }
 
-test("refresh during the reward flight preserves exactly one reward", async ({
+const legacy = {
+  version: 1,
+  level: 8,
+  balance: 123,
+  lastRoll: null,
+  inventory: {
+    d2: 3,
+    d3: 2,
+    d4: 1,
+    d6: 2,
+    d8: 0,
+    d10: 0,
+    d12: 0,
+    d20: 0,
+    d100: 0,
+  },
+};
+test("legacy migration backs up the save and preserves progress and capacity", async ({
   page,
 }) => {
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
-  await page.addInitScript(() => {
-    Math.random = () => 0.99;
-  });
+  await page.addInitScript((state) => {
+    if (!localStorage.getItem("master-roller:save"))
+      localStorage.setItem("master-roller:save", JSON.stringify(state));
+  }, legacy);
   await page.goto("./");
-  const arena = page.getByRole("region", { name: "Roll arena" });
-  await page
-    .getByRole("button", { name: "Roll your die", exact: true })
-    .click();
-  await page.clock.fastForward(550);
-  await expect(arena).toHaveAttribute("data-phase", "faces");
-  await page.clock.fastForward(280);
-  await expect(arena).toHaveAttribute("data-phase", "total");
-  await page.clock.fastForward(450);
-  await expect(arena).toHaveAttribute("data-phase", "impact");
-  await page.clock.fastForward(500);
-  await expect(arena).toHaveAttribute("data-phase", "leveling");
-  await page.clock.fastForward(300);
-  await expect(arena).toHaveAttribute("data-phase", "reward");
-  await page.clock.fastForward(500);
-  await expect(arena).toHaveAttribute("data-phase", "crediting");
-  await expect(
-    page.getByRole("button", { name: "0 Dicecoin", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText(/Your d2\/d3 became d4/)).toBeVisible();
+  const result = await page.evaluate(() => ({
+    save: JSON.parse(localStorage.getItem("master-roller:save")!),
+    backup: JSON.parse(localStorage.getItem("master-roller:save:v1-backup")!),
+  }));
+  expect(result.backup).toEqual(legacy);
+  expect(result.save).toMatchObject({
+    version: 2,
+    level: 8,
+    balance: 123,
+    slots: 8,
+    inventory: { d4: 6, d6: 2 },
+  });
+  expect("d2" in result.save.inventory).toBe(false);
   await page.reload();
-  await expect(
-    page.getByRole("button", { name: "20 Dicecoin", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByTestId("target")).toHaveText("2");
-  await expect(arena).toHaveAttribute("data-phase", "idle");
-  await expect(page.getByTestId("roll-total")).toBeEmpty();
-  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
-  await page.clock.fastForward(10000);
-  await expect(
-    page.getByRole("button", { name: "20 Dicecoin", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText(/Your d2\/d3 became d4/)).toHaveCount(0);
+  await section(page, "Dice shop");
+  await expect(page.getByText("8 / 8 slots used")).toBeVisible();
+});
+
+test("migration backup failure does not overwrite the original save", async ({
+  page,
+}) => {
+  await page.addInitScript((state) => {
+    localStorage.setItem("master-roller:save", JSON.stringify(state));
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "master-roller:save:v1-backup") throw new Error("quota");
+      original.call(this, key, value);
+    };
+  }, legacy);
+  await page.goto("./");
+  await expect(page.getByText(/Saving is unavailable/)).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("master-roller:save")!),
+    ),
+  ).toEqual(legacy);
 });
