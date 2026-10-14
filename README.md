@@ -4,6 +4,8 @@
 
 A small dice collection game built for phones. Start with one d2, earn Dicecoin, buy more dice, and keep climbing.
 
+Dice sit directly on the main game board and show their rolled faces. Tap **+ DICE** to open the shop; **?** holds the rules and last-roll details. Large stacks show six dice plus an extra-copy count, and every owned copy still contributes to the total.
+
 ## How to play
 
 - Every tap of **Roll** rolls all your owned dice once.
@@ -28,7 +30,7 @@ Prices equal 20 × average roll. Balancing constants live in `src/game.ts`. The 
 
 ## Purchases and saves
 
-**All purchase offers in the Test Lab are simulated.** Each die offer grants one copy, and the coin pack grants 10,000 Dicecoin. Offers can be repeated, never charge real money, and do not ask for payment information. Dicecoin has no real monetary value in this test release.
+**All offers under Test purchases are simulated.** Open them from the dice shop. Each die offer grants one copy, and the coin pack grants 10,000 Dicecoin. Offers can be repeated, never charge real money, and do not ask for payment information. Dicecoin has no real monetary value in this test release.
 
 Progress automatically saves in localStorage in the current browser. It does not sync across devices; clearing browser data removes it. Storage failures show a warning while allowing play. An unreadable or unsupported save offers an explicit fresh-start recovery. Use the reset button to clear progress after confirmation.
 

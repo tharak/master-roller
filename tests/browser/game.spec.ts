@@ -1,9 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function section(page: Page, name: "Play" | "Dice shop") {
-  const tabs = page.getByRole("navigation", { name: "Game sections" });
-  if (await tabs.isVisible())
-    await tabs.getByRole("button", { name, exact: true }).click();
+  if (name === "Dice shop") {
+    await page.getByRole("button", { name: "Dice shop", exact: true }).click();
+  } else if (await page.getByRole("dialog").isVisible()) {
+    await page
+      .getByRole("button", { name: "Close dice shop", exact: true })
+      .click();
+  }
 }
 test("starting journey, purchases, reload, and confirmed reset", async ({
   page,
@@ -78,7 +82,7 @@ test("losing roll earns a d2; rapid taps cannot double resolve", async ({
       button.click();
       button.click();
     });
-  await expect(page.getByText("So close. Roll again.")).toBeVisible();
+  await expect(page.getByText("TRY AGAIN", { exact: true })).toBeVisible();
   await expect(page.getByLabel("10 Dicecoin", { exact: true })).toBeVisible();
   await expect(page.getByTestId("target")).toHaveText("1");
   await section(page, "Dice shop");
@@ -201,6 +205,78 @@ test("fits narrow screens, keyboard controls work, and reduced motion resolves r
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Test purchases", exact: true }),
+    page.getByRole("button", { name: "Dice shop", exact: true }),
   ).toBeFocused();
+});
+
+test("dice are on the main screen and show each rolled face", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    Math.random = () => 0.99;
+  });
+  await page.goto("./");
+  const dice = page.getByRole("region", { name: "Your collection" });
+  await expect(
+    dice.getByLabel("d2 not rolled yet", { exact: true }),
+  ).toBeVisible();
+  const roll = page.getByRole("button", { name: "Roll your die", exact: true });
+  const bounds = await roll.boundingBox();
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+  await roll.click();
+  await expect(dice.getByLabel("d2 rolled 1", { exact: true })).toBeVisible();
+  await section(page, "Dice shop");
+  await page
+    .getByRole("button", { name: "Buy d2 for 10 Dicecoin", exact: true })
+    .click();
+  await section(page, "Play");
+  await expect(
+    dice.getByLabel("d2 not rolled yet", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Roll your dice", exact: true })
+    .click();
+  await expect(dice.getByLabel("d2 rolled 1", { exact: true })).toHaveCount(2);
+  await expect(page.getByTestId("roll-total")).toHaveText("2");
+});
+
+test("large collections still roll every die and expose all die types", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "master-roller:save",
+      JSON.stringify({
+        version: 1,
+        level: 1,
+        balance: 0,
+        lastRoll: null,
+        inventory: {
+          d2: 50,
+          d3: 0,
+          d4: 0,
+          d6: 0,
+          d8: 0,
+          d10: 0,
+          d12: 0,
+          d20: 0,
+          d100: 1,
+        },
+      }),
+    );
+    Math.random = () => 0.99;
+  });
+  await page.goto("./");
+  await expect(
+    page.getByLabel("d100 not rolled yet", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Roll your dice", exact: true })
+    .click();
+  await expect(page.getByTestId("roll-total")).toHaveText("150");
+  await expect(
+    page.getByLabel("d100 rolled 100", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("+44", { exact: true })).toBeVisible();
 });

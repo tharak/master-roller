@@ -8,7 +8,6 @@ import {
   rollGame,
   simulatePurchase,
   type DieId,
-  type GameState,
   type TestOffer,
 } from "./game";
 import { loadGame, saveGame, type SaveStatus } from "./storage";
@@ -37,10 +36,9 @@ export default function App() {
   const [game, setGame] = useState(initial.state);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(initial.status);
   const [rolling, setRolling] = useState(false);
-  const [tab, setTab] = useState<"play" | "shop">("play");
-  const [modal, setModal] = useState<"reset" | "test" | "recovery" | null>(
-    initial.status === "invalid" ? "recovery" : null,
-  );
+  const [modal, setModal] = useState<
+    "reset" | "test" | "recovery" | "shop" | "help" | null
+  >(initial.status === "invalid" ? "recovery" : null);
   const [message, setMessage] = useState("");
   const busy = useRef(false);
   const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,8 +64,10 @@ export default function App() {
   );
   useEffect(() => {
     if (modal) {
-      previousFocus.current = document.activeElement as HTMLElement;
-      dialog.current?.showModal();
+      if (!dialog.current?.open) {
+        previousFocus.current = document.activeElement as HTMLElement;
+        dialog.current?.showModal();
+      }
     } else if (dialog.current?.open) {
       dialog.current.close();
       previousFocus.current?.focus();
@@ -95,7 +95,7 @@ export default function App() {
   function buy(id: DieId) {
     if (busy.current) return;
     setGame((current) => buyDie(current, id));
-    setMessage(`${id} added to your collection.`);
+    setMessage(`+1 ${id}`);
   }
   function testBuy(offer: TestOffer) {
     if (busy.current) return;
@@ -110,386 +110,330 @@ export default function App() {
     setGame(newGame());
     setSaveStatus("saved");
     setModal(null);
-    setMessage("A fresh start. Let’s roll!");
+    setMessage("Reset");
   }
   const last = game.lastRoll;
 
-  return (
-    <>
-      <header className="header">
-        <a
-          className="brand"
-          href="#"
-          aria-label="Master Roller home"
-          onClick={(e) => {
-            e.preventDefault();
-            setTab("play");
-          }}
-        >
-          <span className="brand-mark" aria-hidden="true">
-            ✣
-          </span>
-          <span>
-            master<span className="brand-light">roller</span>
-            <span className="beta">BETA</span>
-          </span>
-        </a>
-        <div className="header-actions">
-          <span className="wallet" aria-label={`${game.balance} Dicecoin`}>
-            <Coin amount={game.balance} />
-            <span className="wallet-name">Dicecoin</span>
-          </span>
-          <button
-            className="icon-button"
-            aria-label="Reset progress"
-            disabled={rolling}
-            onClick={() => setModal("reset")}
-          >
-            ↺
-          </button>
-        </div>
-      </header>
+  const visibleDice = DICE.flatMap((die) => {
+    const values =
+      last?.dice.find((group) => group.id === die.id)?.values ?? [];
+    return Array.from(
+      { length: Math.min(game.inventory[die.id], 6) },
+      (_, index) => ({
+        die,
+        index,
+        value: values[index],
+        remaining: index === 5 ? game.inventory[die.id] - 6 : 0,
+      }),
+    );
+  });
 
-      <main>
-        <div className="intro">
-          <div>
-            <p className="eyebrow">SMALL DICE. BIG POSSIBILITIES.</p>
-            <h1>
-              Roll your way up<span>.</span>
-            </h1>
-            <p className="intro-copy">
-              Build your collection. Beat the number. Keep climbing.
-            </p>
-          </div>
-          <span className="release-tag">
-            <span /> MOBILE WEB TEST
-          </span>
-        </div>
-        <nav className="mobile-tabs" aria-label="Game sections">
-          <button aria-pressed={tab === "play"} onClick={() => setTab("play")}>
-            Play
-          </button>
-          <button aria-pressed={tab === "shop"} onClick={() => setTab("shop")}>
-            Dice shop
-          </button>
-        </nav>
+  return (
+    <div className="game-shell">
+      <header className="hud">
+        <h1 className="brand">
+          master<span>roller</span>
+        </h1>
+        <span className="wallet" aria-label={`${game.balance} Dicecoin`}>
+          <Coin amount={game.balance} />
+        </span>
+        <button
+          className="icon-button"
+          aria-label="How to play"
+          onClick={() => setModal("help")}
+        >
+          ?
+        </button>
+        <button
+          className="icon-button"
+          aria-label="Reset progress"
+          disabled={rolling}
+          onClick={() => setModal("reset")}
+        >
+          ↺
+        </button>
+      </header>
+      <main className="game-main">
         {saveStatus === "unavailable" && (
           <p className="warning" role="status">
-            Saving is unavailable. You can play, but progress may be lost when
-            you leave.
+            Saving is unavailable. Progress won’t be kept.
           </p>
         )}
-
-        <div className={`play-layout ${tab === "shop" ? "mobile-hidden" : ""}`}>
-          <section className="arena panel" aria-label="Roll arena">
-            <div className="panel-top">
-              <span className="eyebrow">THE NEXT CHALLENGE</span>
-              <span className="stage-pill">LEVEL {number(game.level)}</span>
+        <section
+          className={`arena ${rolling ? "is-rolling" : ""} ${last?.won && !rolling ? "is-win" : ""}`}
+          aria-label="Roll arena"
+        >
+          <div className="level-target">
+            <span className="level-label">LEVEL</span>
+            <div className="target-value">
+              <span className="target-sign" aria-hidden="true">
+                ≥
+              </span>
+              <span data-testid="target">{number(game.level)}</span>
             </div>
-            <div className="target">
-              <span className="target-label">ROLL AT LEAST</span>
-              <div className="target-number" data-testid="target">
-                {number(game.level)}
-              </div>
-              <p>
-                Your dice total needs to reach{" "}
-                <strong>{number(game.level)}</strong> or more.
-              </p>
+          </div>
+          <section className="dice-field" aria-label="Your collection">
+            <div
+              className="dice-count"
+              aria-label={`${stats.count} ${stats.count === 1 ? "die" : "dice"}`}
+            >
+              {number(stats.count)} {stats.count === 1 ? "die" : "dice"}
             </div>
             <div
-              className={`result ${last ? (last.won ? "result-win" : "result-loss") : ""}`}
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
+              className={`dice-grid ${visibleDice.length === 1 ? "single-die" : ""}`}
             >
-              {rolling ? (
-                <>
-                  <span className="result-symbol spinning">↻</span>
-                  <div>
-                    <strong>Let them roll…</strong>
-                    <span>Every die gets a chance.</span>
-                  </div>
-                </>
-              ) : last ? (
-                <>
-                  <span className="result-symbol">{last.won ? "↗" : "↻"}</span>
-                  <div>
-                    <strong>
-                      {last.won
-                        ? `Level ${number(last.level)} cleared!`
-                        : "So close. Roll again."}
-                    </strong>
-                    <span>
-                      You rolled {number(last.total)} · Target{" "}
-                      {number(last.level)}
+              {visibleDice.map(({ die, index, value, remaining }) => (
+                <div
+                  className={`play-die ${die.color} ${value === undefined ? "unrolled" : ""}`}
+                  key={`${die.id}-${index}`}
+                  aria-label={`${die.id} ${value === undefined ? "not rolled yet" : `rolled ${value}`}`}
+                >
+                  <span className="die-type">{die.id}</span>
+                  <strong className="die-value">
+                    {rolling ? "·" : value === undefined ? "?" : value}
+                  </strong>
+                  {index === 0 && game.inventory[die.id] > 1 && (
+                    <span className="die-quantity">
+                      ×{number(game.inventory[die.id])}
                     </span>
-                  </div>
-                  <span className="reward">
-                    +{last.reward} <span className="reward-unit">DC</span>
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="result-symbol">↗</span>
-                  <div>
-                    <strong>One die is all it takes to start.</strong>
-                    <span>Your first level is waiting.</span>
-                  </div>
-                </>
-              )}
-            </div>
-            <button
-              className="roll-button"
-              disabled={rolling || modal === "recovery"}
-              onClick={roll}
-            >
-              <span aria-hidden="true">✣</span>
-              {rolling
-                ? "Rolling…"
-                : `Roll ${stats.count === 1 ? "your die" : "your dice"}`}
-              <span aria-hidden="true">↗</span>
-            </button>
-            <p className="roll-note">
-              Every roll earns Dicecoin. <strong>Win +20</strong>
-              <span> / </span>
-              <strong>Lose +10</strong>
-            </p>
-          </section>
-
-          <section
-            className="collection panel"
-            aria-labelledby="collection-title"
-          >
-            <div className="panel-top">
-              <h2 id="collection-title">Your collection</h2>
-              <span className="count-pill">
-                {number(stats.count)} {stats.count === 1 ? "die" : "dice"}
-              </span>
-            </div>
-            <p className="section-copy">
-              Every die rolls with you. More dice, more possibility.
-            </p>
-            <div className="collection-list">
-              {DICE.filter((d) => game.inventory[d.id] > 0).map((d) => (
-                <div className="collection-row" key={d.id}>
-                  <span className={`die-badge ${d.color}`}>{d.id}</span>
-                  <div className="collection-info">
-                    <strong>{d.name}</strong>
-                    <span>
-                      {d.min}–{d.max} per die
+                  )}
+                  {remaining > 0 && (
+                    <span
+                      className="extra-dice"
+                      title="Additional dice also roll"
+                    >
+                      +{number(remaining)}
                     </span>
-                  </div>
-                  <span className="quantity">
-                    ×{number(game.inventory[d.id])}
-                  </span>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="pool-range">
-              <span>Possible total</span>
-              <strong>
-                {number(stats.min)} <span>—</span> {number(stats.max)}
-              </strong>
-            </div>
-            {last && (
-              <details className="breakdown">
-                <summary>
-                  Last roll breakdown <span>{number(last.total)} total</span>
-                </summary>
-                <p>
-                  Level {last.level} · {last.won ? "Cleared" : "Try again"}
-                </p>
-                {last.dice.map((group) => (
-                  <div key={group.id}>
-                    <strong>
-                      {group.id} ×{group.values.length}
-                    </strong>
-                    <span>
-                      {group.values.length > 100
-                        ? `${group.values.slice(0, 100).join(" + ")} + … (${group.values.length} dice)`
-                        : group.values.join(" + ")}
-                    </span>
-                  </div>
-                ))}
-              </details>
-            )}
-            <button
-              className="collection-shop-link"
-              onClick={() => {
-                setTab("shop");
-                document
-                  .getElementById("shop")
-                  ?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              Grow your collection <span>↗</span>
-            </button>
           </section>
-        </div>
-
-        <section
-          id="shop"
-          className={`shop ${tab === "play" ? "mobile-hidden" : ""}`}
-          aria-labelledby="shop-title"
-        >
-          <div className="shop-heading">
-            <div>
-              <p className="eyebrow">INVEST IN YOUR NEXT ROLL</p>
-              <h2 id="shop-title">A little more luck.</h2>
-              <p>Pick up a new die. They all add up.</p>
-            </div>
-            <span className="shop-hint">
-              Buy as many as you like <span>↙</span>
-            </span>
-          </div>
-          <div className="shop-grid">
-            {DICE.map((d) => (
-              <article
-                className="die-card"
-                key={d.id}
-                aria-label={`${d.id} shop item`}
-              >
-                <div className="die-card-top">
-                  <span className={`die-badge large ${d.color}`}>{d.id}</span>
-                  <span className="owned">
-                    {number(game.inventory[d.id])} owned
+          <div
+            className="result-area"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {last && !rolling ? (
+              <>
+                <div className="roll-total">
+                  <span>TOTAL</span>
+                  <strong data-testid="roll-total">{number(last.total)}</strong>
+                </div>
+                <div className={`outcome ${last.won ? "won" : "lost"}`}>
+                  <strong>{last.won ? "CLEARED!" : "TRY AGAIN"}</strong>
+                  <span>
+                    +{last.reward} <Coin />
+                  </span>
+                  <span className="sr-only">
+                    Level {last.level}. Rolled {last.total}, target {last.level}
+                    .
                   </span>
                 </div>
-                <h3>{d.name}</h3>
-                <p>
-                  Rolls {d.min}–{d.max}
-                </p>
-                <button
-                  className="buy-button"
-                  aria-label={`Buy ${d.id} for ${d.price} Dicecoin`}
-                  disabled={
-                    rolling || game.balance < d.price || modal === "recovery"
-                  }
-                  onClick={() => buy(d.id)}
-                >
-                  <Coin amount={d.price} />
-                  <span>
-                    {game.balance >= d.price ? "+ Add die" : "Save up"}
-                  </span>
-                </button>
-              </article>
-            ))}
+              </>
+            ) : (
+              <div className="ready-label">
+                {rolling ? "ROLLING…" : "TAP TO ROLL"}
+              </div>
+            )}
           </div>
-          <aside className="test-banner">
-            <span className="test-icon" aria-hidden="true">
-              ✧
-            </span>
-            <div>
-              <strong>Want to try a bigger collection?</strong>
-              <p>Explore test purchases. No real money, just possibilities.</p>
-            </div>
-            <button
-              className="secondary-button"
-              disabled={rolling}
-              onClick={() => setModal("test")}
-            >
-              Test purchases <span aria-hidden="true">↗</span>
-            </button>
-          </aside>
         </section>
-        <footer>
-          <span>Made for one more roll.</span>
-          <span className="save-indicator">
-            <span
-              className={saveStatus === "saved" ? "saved-dot" : "unsaved-dot"}
-            />
-            {saveStatus === "saved"
-              ? "Progress saved on this device"
-              : saveStatus === "invalid"
-                ? "Save needs recovery"
-                : "Progress is not saved"}
-          </span>
-          <a
-            href="https://github.com/tharak/master-roller/issues"
-            target="_blank"
-            rel="noreferrer"
+        <div className="controls">
+          <button
+            className="roll-button"
+            aria-label={
+              rolling
+                ? "Rolling…"
+                : `Roll your ${stats.count === 1 ? "die" : "dice"}`
+            }
+            disabled={rolling || modal === "recovery"}
+            onClick={roll}
           >
-            Feedback ↗
-          </a>
-        </footer>
+            <span aria-hidden="true">↻</span>
+            {rolling ? "ROLLING…" : "ROLL"}
+          </button>
+          <button
+            className="shop-button"
+            aria-label="Dice shop"
+            disabled={rolling}
+            onClick={() => setModal("shop")}
+          >
+            <span aria-hidden="true">+</span>DICE
+          </button>
+        </div>
+        <div className="save-status">
+          <span
+            className={saveStatus === "saved" ? "saved-dot" : "unsaved-dot"}
+            title={
+              saveStatus === "saved" ? "Progress saved" : "Progress not saved"
+            }
+            aria-label={
+              saveStatus === "saved" ? "Progress saved" : "Progress not saved"
+            }
+          />
+        </div>
       </main>
       <div
-        className={`toast ${message ? "visible" : ""}`}
+        className={`toast ${message && !modal ? "visible" : ""}`}
         role="status"
         aria-live="polite"
       >
-        {message}
+        {!modal ? message : ""}
       </div>
       <dialog
         ref={dialog}
-        className="modal"
+        className={`modal ${modal === "shop" ? "shop-modal" : ""}`}
         aria-labelledby="modal-title"
         onCancel={(e) => {
           if (modal === "recovery") e.preventDefault();
           else setModal(null);
         }}
       >
-        {modal === "test" ? (
+        {modal !== "recovery" && (
+          <button
+            className="icon-button modal-close"
+            aria-label={
+              modal === "test"
+                ? "Close test purchases"
+                : modal === "shop"
+                  ? "Close dice shop"
+                  : "Close"
+            }
+            onClick={() => setModal(null)}
+          >
+            ×
+          </button>
+        )}
+        {modal === "shop" ? (
           <>
-            <div className="modal-heading">
-              <p className="eyebrow">THE TEST LAB</p>
-              <button
-                className="icon-button"
-                aria-label="Close test purchases"
-                onClick={() => setModal(null)}
-              >
-                ×
+            <h2 id="modal-title">Dice shop</h2>
+            <div
+              className="shop-wallet"
+              aria-label={`${game.balance} Dicecoin available`}
+            >
+              <Coin amount={game.balance} />
+            </div>
+            <div className="shop-grid">
+              {DICE.map((die) => (
+                <article
+                  className={`die-card ${die.color}`}
+                  key={die.id}
+                  aria-label={`${die.id} shop item`}
+                >
+                  <div className="shop-die-type">
+                    {die.id}
+                    <span className="owned">
+                      ×{number(game.inventory[die.id])}
+                    </span>
+                  </div>
+                  <span className="die-range">
+                    {die.min}–{die.max}
+                  </span>
+                  <button
+                    className="buy-button"
+                    aria-label={`Buy ${die.id} for ${die.price} Dicecoin`}
+                    disabled={rolling || game.balance < die.price}
+                    onClick={() => buy(die.id)}
+                  >
+                    <Coin amount={die.price} />
+                    <span aria-hidden="true">+</span>
+                  </button>
+                </article>
+              ))}
+            </div>
+            <div className="shop-bottom">
+              <p className="purchase-feedback" role="status">
+                {message}
+              </p>
+              <button className="text-button" onClick={() => setModal("test")}>
+                Test purchases
               </button>
             </div>
-            <h2 id="modal-title">Try your luck. On us.</h2>
-            <p className="modal-copy">
-              Simulated purchases only. No charge, no payment details. Grants
-              are saved to this browser.
-            </p>
-            <button className="pack-button" onClick={() => testBuy("coins")}>
-              <div>
-                <span className="eyebrow">THE BIG COIN PACK</span>
-                <strong>
-                  <Coin amount={ECONOMY.coinPack} /> Dicecoin
-                </strong>
-                <small>Simulated purchase — no charge</small>
-              </div>
-              <span>+ Add</span>
+          </>
+        ) : modal === "test" ? (
+          <>
+            <h2 id="modal-title">Test purchases</h2>
+            <p className="modal-copy">No charge, no payment details.</p>
+            <button
+              className="pack-button"
+              aria-label="THE BIG COIN PACK: simulate 10,000 Dicecoin"
+              onClick={() => testBuy("coins")}
+            >
+              <strong>
+                <Coin amount={ECONOMY.coinPack} />
+              </strong>
+              <span>
+                +<small>Simulated purchase — no charge</small>
+              </span>
             </button>
             <div className="test-dice-grid">
-              {DICE.map((d) => (
+              {DICE.map((die) => (
                 <button
-                  key={d.id}
-                  aria-label={`Simulate purchase of ${d.id}`}
-                  onClick={() => testBuy(d.id)}
+                  className={die.color}
+                  key={die.id}
+                  aria-label={`Simulate purchase of ${die.id}`}
+                  onClick={() => testBuy(die.id)}
                 >
-                  <span className={`die-badge ${d.color}`}>{d.id}</span>
+                  <strong>{die.id}</strong>
                   <span>
-                    Add one {d.id}
-                    <small>Simulated · no charge</small>
+                    +<small>Simulated · no charge</small>
                   </span>
-                  <span>+</span>
                 </button>
               ))}
             </div>
             <p className="modal-note" role="status">
-              {message || "Test purchases can be repeated."}
+              {message}
             </p>
+          </>
+        ) : modal === "help" ? (
+          <>
+            <h2 id="modal-title">How to play</h2>
+            <p className="modal-copy">
+              Roll all your dice. Reach the level number to advance.
+            </p>
+            <p className="help-rewards">
+              Win <strong>+20</strong>
+              <Coin /> · Lose <strong>+10</strong>
+              <Coin />
+            </p>
+            <p className="modal-copy">
+              Buy more dice with Dicecoin. Every die joins every roll.
+            </p>
+            <p className="modal-copy">
+              d2: 0–1. Other dice: 1–their face count.
+            </p>
+            {last && (
+              <details className="breakdown">
+                <summary>Last roll · {number(last.total)}</summary>
+                {last.dice.map((group) => (
+                  <p key={group.id}>
+                    <strong>
+                      {group.id} ×{group.values.length}
+                    </strong>{" "}
+                    {group.values.join(" + ")}
+                  </p>
+                ))}
+              </details>
+            )}
+            <a
+              className="text-button feedback-link"
+              href="https://github.com/tharak/master-roller/issues"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Feedback ↗
+            </a>
           </>
         ) : (
           <>
-            <p className="eyebrow">
-              {modal === "recovery" ? "SAVE RECOVERY" : "A FRESH START"}
-            </p>
             <h2 id="modal-title">
-              {modal === "recovery"
-                ? "This save needs a fresh start."
-                : "Start from one die again?"}
+              {modal === "recovery" ? "Recover save" : "Reset progress?"}
             </h2>
             <p className="modal-copy">
               {modal === "recovery"
-                ? "The saved progress could not be read. Start a new game to replace it with level 1, one d2, and zero Dicecoin."
-                : "This clears your levels, Dicecoin, and collection on this browser. You’ll start at level 1 with one d2."}
+                ? "This save could not be read. Replace it with a fresh game?"
+                : "Start over at level 1 with one d2 and zero Dicecoin?"}
             </p>
             <div className="modal-buttons">
               {modal !== "recovery" && (
@@ -507,6 +451,6 @@ export default function App() {
           </>
         )}
       </dialog>
-    </>
+    </div>
   );
 }
