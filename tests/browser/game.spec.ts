@@ -672,6 +672,13 @@ for (const scenario of [
     await page.clock.fastForward(1);
     await expect(arena).toHaveAttribute("data-phase", "idle");
     expect((await page.evaluate(() => performance.now())) - started).toBe(1000);
+    expect(
+      await page
+        .locator(".play-die")
+        .evaluateAll((dice) =>
+          dice.every((die) => die.getAnimations().length === 0),
+        ),
+    ).toBe(true);
     await expect(page.getByTestId("roll-total")).toBeEmpty();
     await expect(
       page.locator(".total-flight, .impact-shatter, .reward-flight"),
@@ -711,6 +718,13 @@ for (const [offset, phase] of [
     await expect(
       page.locator(".total-flight, .impact-shatter, .reward-flight"),
     ).toHaveCount(0);
+    expect(
+      await page
+        .locator(".play-die")
+        .evaluateAll((dice) =>
+          dice.every((die) => die.getAnimations().length === 0),
+        ),
+    ).toBe(true);
     await page.clock.runFor(2000);
     await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
     expect(

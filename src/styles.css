@@ -830,7 +830,8 @@ p {
 .wallet-collected {
   animation: wallet-pop 30ms ease-out;
 }
-.phase-gathering .play-die {
+.phase-gathering .play-die,
+.phase-idle .play-die {
   animation: none;
 }
 .phase-total .play-die,
