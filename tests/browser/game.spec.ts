@@ -21,9 +21,14 @@ async function section(page: Page, name: "Play" | "Dice shop") {
       .click();
 }
 async function resolveFaces(page: Page) {
-  await page.clock.fastForward(550);
+  await page.clock.fastForward(120);
   await expect(page.locator(".arena")).toHaveAttribute("data-phase", "faces");
-  await page.clock.fastForward(280);
+  await page.clock.fastForward(80);
+  await expect(page.locator(".arena")).toHaveAttribute(
+    "data-phase",
+    "gathering",
+  );
+  await page.clock.fastForward(160);
   await expect(page.locator(".arena")).toHaveAttribute("data-phase", "total");
 }
 
@@ -123,7 +128,7 @@ test("a loss earns its total and rapid taps cannot double resolve", async ({
     button.click();
     button.click();
   });
-  await expect(page.getByTestId("roll-total")).toHaveText("1");
+  await expect(page.locator(".arena [role=status]")).toContainText("Total 1.");
   await expect(page.getByLabel("1 Dicecoin", { exact: true })).toBeVisible();
   await expect(page.getByTestId("target")).toHaveText("5");
   expect(
@@ -346,7 +351,7 @@ test("dice have shapes and numeric faces without type labels", async ({
     dice.getByLabel("d6 not rolled yet", { exact: true }),
   ).toBeVisible();
   await rollButton(page).click();
-  await expect(page.getByTestId("roll-total")).toHaveText("10");
+  await expect(page.locator(".arena [role=status]")).toContainText("Total 10.");
   await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
   await expect(page.getByTestId("roll-total")).toBeEmpty();
 });
@@ -454,7 +459,9 @@ test("all owned dice contribute even beyond the visual six-copy cap", async ({
     page.getByLabel("d100 not rolled yet", { exact: true }),
   ).toBeVisible();
   await rollButton(page).click();
-  await expect(page.getByTestId("roll-total")).toHaveText("300");
+  await expect(page.locator(".arena [role=status]")).toContainText(
+    "Total 300.",
+  );
   await expect(
     page.getByLabel("d100 rolled 100", { exact: true }),
   ).toBeVisible();
@@ -513,8 +520,12 @@ for (const scenario of [
       wallet = page.getByRole("button", { name: "0 Dicecoin", exact: true });
     await wallet.click();
     await section(page, "Play");
+    const started = await page.evaluate(() => performance.now());
     await rollButton(page).click();
-    await page.clock.fastForward(550);
+    await expect(
+      page.getByRole("button", { name: "Skip animation", exact: true }),
+    ).toBeEnabled();
+    await page.clock.fastForward(120);
     await expect(arena).toHaveAttribute("data-phase", "faces");
     await expect(
       page.getByLabel(`d4 rolled ${scenario.face}`, { exact: true }),
@@ -528,7 +539,7 @@ for (const scenario of [
         () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
       ),
     ).toBe(scenario.total);
-    await page.clock.fastForward(280);
+    await page.clock.fastForward(80);
     await expect(arena).toHaveAttribute("data-phase", "gathering");
     expect(
       await page
@@ -537,6 +548,7 @@ for (const scenario of [
           dice.every((die) => die.getAnimations().length > 0),
         ),
     ).toBe(true);
+    await page.clock.fastForward(160);
     await expect(arena).toHaveAttribute("data-phase", "total");
     await expect(page.locator(".play-die").first()).toHaveCSS("opacity", "0");
     await expect(page.getByTestId("roll-total")).toHaveText(
@@ -546,14 +558,14 @@ for (const scenario of [
       "data-die-shape",
       "pyramid",
     );
-    await page.clock.fastForward(450);
+    await page.clock.fastForward(90);
     await expect(arena).toHaveAttribute("data-phase", "targeting");
     const collision = await page
       .locator(".total-flight")
       .evaluate((element) => {
         const animation = element.getAnimations()[0];
         animation.pause();
-        animation.currentTime = 600;
+        animation.currentTime = Number(animation.effect!.getTiming().duration);
         const die = element.getBoundingClientRect(),
           level = document
             .querySelector(".level-target > .level-copy")!
@@ -569,6 +581,7 @@ for (const scenario of [
       });
     expect(collision.centerGap).toBeLessThan(1);
     expect(collision.edgeGap).toBeLessThan(1);
+    await page.clock.fastForward(150);
     await expect(arena).toHaveAttribute("data-phase", "impact");
     await expect(page.locator(".impact-shard")).toHaveCount(12);
     await expect(page.getByTestId("target")).toHaveText(
@@ -583,22 +596,68 @@ for (const scenario of [
     ).toHaveCount(1);
     await expect(wallet).toBeVisible();
     await expect(wallet).toBeDisabled();
-    await page.clock.fastForward(500);
+    await page.clock.fastForward(scenario.won ? 100 : 160);
     if (scenario.won) {
       await expect(arena).toHaveAttribute("data-phase", "leveling");
       await expect(page.getByTestId("target")).toHaveText(
         String(scenario.level),
       );
-      await page.clock.fastForward(300);
+      await page.clock.fastForward(60);
     }
     await expect(arena).toHaveAttribute("data-phase", "reward");
     await expect(page.locator(".earned-reward")).toContainText(
       `+${scenario.total}`,
     );
-    await page.clock.fastForward(500);
+    const origin = await page.locator(".earned-reward").boundingBox(),
+      levelText = await page
+        .locator(".level-target > .level-copy")
+        .boundingBox();
+    expect(
+      Math.abs(
+        origin!.x + origin!.width / 2 - levelText!.x - levelText!.width / 2,
+      ),
+    ).toBeLessThan(1);
+    expect(
+      Math.abs(
+        origin!.y + origin!.height / 2 - levelText!.y - levelText!.height / 2,
+      ),
+    ).toBeLessThan(1);
+    await page.clock.fastForward(60);
     await expect(arena).toHaveAttribute("data-phase", "crediting");
     await expect(page.getByTestId("reward-flight")).toBeVisible();
     await expect(wallet).toBeVisible();
+    const flight = await page
+      .getByTestId("reward-flight")
+      .evaluate((element) => {
+        const animation = element.getAnimations()[0];
+        animation.pause();
+        animation.currentTime = 0;
+        const start = element.getBoundingClientRect();
+        const level = document
+          .querySelector(".level-target > .level-copy")!
+          .getBoundingClientRect();
+        animation.currentTime = Number(animation.effect!.getTiming().duration);
+        const end = element.getBoundingClientRect();
+        const destination = document
+          .querySelector(".wallet")!
+          .getBoundingClientRect();
+        const gap = (a: DOMRect, b: DOMRect) =>
+          Math.hypot(
+            a.x + a.width / 2 - b.x - b.width / 2,
+            a.y + a.height / 2 - b.y - b.height / 2,
+          );
+        animation.currentTime = 0;
+        animation.play();
+        return {
+          originGap: gap(start, level),
+          destinationGap: gap(end, destination),
+          upward: end.y < start.y,
+        };
+      });
+    expect(flight.originGap).toBeLessThan(1);
+    expect(flight.destinationGap).toBeLessThan(1);
+    expect(flight.upward).toBe(true);
+    await page.clock.fastForward(150);
     await expect(arena).toHaveAttribute("data-phase", "collected");
     await expect(
       page.getByRole("button", {
@@ -606,13 +665,84 @@ for (const scenario of [
         exact: true,
       }),
     ).toBeVisible();
-    await page.clock.fastForward(220);
+    await page.clock.fastForward(29);
+    await expect(
+      page.getByRole("button", { name: "Skip animation", exact: true }),
+    ).toBeEnabled();
+    await page.clock.fastForward(1);
     await expect(arena).toHaveAttribute("data-phase", "idle");
+    expect((await page.evaluate(() => performance.now())) - started).toBe(1000);
+    expect(
+      await page
+        .locator(".play-die")
+        .evaluateAll((dice) =>
+          dice.every((die) => die.getAnimations().length === 0),
+        ),
+    ).toBe(true);
     await expect(page.getByTestId("roll-total")).toBeEmpty();
     await expect(
       page.locator(".total-flight, .impact-shatter, .reward-flight"),
     ).toHaveCount(0);
     await expect(rollButton(page)).toBeEnabled();
+  });
+}
+
+for (const [offset, phase] of [
+  [0, "rolling"],
+  [200, "gathering"],
+  [820, "crediting"],
+] as const) {
+  test(`Skip during ${phase} credits one result and cancels the remaining timeline`, async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+    await page.addInitScript(() => {
+      Math.random = () => 0.99;
+    });
+    await page.goto("./");
+    await rollButton(page).click();
+    if (offset) await page.clock.runFor(offset);
+    await expect(page.locator(".arena")).toHaveAttribute("data-phase", phase);
+    const skip = page.getByRole("button", {
+      name: "Skip animation",
+      exact: true,
+    });
+    await expect(skip).toHaveText(/SKIP/);
+    await skip.click();
+    await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
+    await expect(
+      page.getByRole("button", { name: "4 Dicecoin", exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByTestId("target")).toHaveText("2");
+    await expect(
+      page.locator(".total-flight, .impact-shatter, .reward-flight"),
+    ).toHaveCount(0);
+    expect(
+      await page
+        .locator(".play-die")
+        .evaluateAll((dice) =>
+          dice.every((die) => die.getAnimations().length === 0),
+        ),
+    ).toBe(true);
+    await page.clock.runFor(2000);
+    await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
+    expect(
+      await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("master-roller:save")!),
+      ),
+    ).toMatchObject({ level: 2, balance: 4 });
+    await rollButton(page).click();
+    await page.clock.runFor(1000);
+    await expect(page.locator(".arena")).toHaveAttribute("data-phase", "idle");
+    await expect(
+      page.getByRole("button", { name: "8 Dicecoin", exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByTestId("target")).toHaveText("3");
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "8 Dicecoin", exact: true }),
+    ).toBeEnabled();
   });
 }
 
@@ -644,12 +774,13 @@ test("highest-sided result die follows the level after resizing", async ({
   expect(
     Math.abs(bounds!.y + bounds!.height / 2 - viewport.height / 2),
   ).toBeLessThan(1);
-  await page.clock.fastForward(450);
+  await page.clock.fastForward(90);
   await expect(page.locator(".arena")).toHaveAttribute(
     "data-phase",
     "targeting",
   );
   await page.setViewportSize({ width: 844, height: 390 });
+  await page.clock.fastForward(150);
   await expect(page.locator(".arena")).toHaveAttribute("data-phase", "impact");
   const shards = await page.locator(".level-shatter").boundingBox(),
     target = await page.locator(".level-target > .level-copy").boundingBox();
@@ -674,15 +805,16 @@ for (const phase of ["targeting", "impact", "crediting"] as const) {
     await page.goto("./");
     await rollButton(page).click();
     await resolveFaces(page);
-    await page.clock.fastForward(450);
+    await page.clock.fastForward(90);
+    if (phase !== "targeting") await page.clock.fastForward(150);
     if (phase === "crediting") {
       await expect(page.locator(".arena")).toHaveAttribute(
         "data-phase",
         "impact",
       );
-      await page.clock.fastForward(500);
-      await page.clock.fastForward(300);
-      await page.clock.fastForward(500);
+      await page.clock.fastForward(100);
+      await page.clock.fastForward(60);
+      await page.clock.fastForward(60);
     }
     await expect(page.locator(".arena")).toHaveAttribute("data-phase", phase);
     await page.reload();

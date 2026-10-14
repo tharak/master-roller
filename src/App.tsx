@@ -22,19 +22,7 @@ import { loadGame, saveGame, type SaveStatus } from "./storage";
 import DieShape, { DIE_SHAPES } from "./DieShape";
 import Shatter from "./Shatter";
 import EconomyView from "./EconomyView";
-
-type RollPhase =
-  | "idle"
-  | "rolling"
-  | "faces"
-  | "gathering"
-  | "total"
-  | "targeting"
-  | "impact"
-  | "leveling"
-  | "reward"
-  | "crediting"
-  | "collected";
+import { ROLL_TIMING, type RollPhase } from "./rollAnimation";
 
 const number = (value: number) => value.toLocaleString("en-US");
 function LevelText({ level, live = false }: { level: number; live?: boolean }) {
@@ -114,6 +102,8 @@ export default function App() {
   >(initial.status === "invalid" ? "recovery" : null);
   const [message, setMessage] = useState("");
   const busy = useRef(false);
+  const pendingRoll = useRef<ReturnType<typeof rollGame> | null>(null);
+  const rollStartedAt = useRef(0);
   const gameRef = useRef(game);
   gameRef.current = game;
   const diceField = useRef<HTMLElement>(null);
@@ -166,30 +156,18 @@ export default function App() {
     }
   }, [game, saveStatus]);
   useEffect(() => {
-    const transitions: Partial<
-      Record<RollPhase, { delay: number; next: RollPhase }>
-    > = {
-      rolling: { delay: 550, next: "faces" },
-      faces: { delay: 280, next: "gathering" },
-      total: { delay: 450, next: "targeting" },
-      impact: {
-        delay: 500,
-        next: gameRef.current.lastRoll?.won ? "leveling" : "reward",
-      },
-      leveling: { delay: 300, next: "reward" },
-      reward: { delay: 500, next: "crediting" },
-      collected: { delay: 220, next: "idle" },
-    };
-    const transition = transitions[phase];
-    if (!transition) return;
-    const timer = setTimeout(() => {
-      // Commit one complete result once; only its presentation waits for the flight.
-      if (phase === "rolling") setGame(rollGame(gameRef.current));
-      if (transition.next === "idle") busy.current = false;
-      setPhase(transition.next);
-    }, transition.delay);
-    return () => clearTimeout(timer);
-  }, [phase]);
+    if (!rolling) return;
+    const timers = Object.entries(ROLL_TIMING).map(([next, at]) =>
+      setTimeout(() => {
+        if (!busy.current) return;
+        if (next === "faces") commitRoll();
+        if (next === "leveling" && !gameRef.current.lastRoll?.won) return;
+        if (next === "idle") busy.current = false;
+        setPhase(next as RollPhase);
+      }, remaining(at)),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [rolling]);
 
   useLayoutEffect(() => {
     if (
@@ -243,21 +221,29 @@ export default function App() {
         { transform: `translate(${x}px, ${y}px) scale(${scale})`, opacity: 1 },
       ],
       {
-        duration: 600,
+        duration: remaining(ROLL_TIMING.impact),
         easing: "cubic-bezier(.5, 0, .8, .5)",
         fill: "forwards",
       },
     );
-    let active = true;
-    void animation.finished
-      .then(() => {
-        if (active) setPhase("impact");
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-      animation.cancel();
-    };
+    return () => animation.cancel();
+  }, [phase, poolSize]);
+
+  useLayoutEffect(() => {
+    if (phase !== "impact" || !levelTarget.current) return;
+    // Measure again at collision; a viewport resize may precede ResizeObserver.
+    const to = levelTarget.current
+      .querySelector(".level-copy")!
+      .getBoundingClientRect();
+    setImpactBox((current) =>
+      gameRef.current.lastRoll!.won
+        ? { left: to.left, top: to.top, width: to.width, height: to.height }
+        : {
+            ...current,
+            left: to.left + to.width / 2 - Number(current.width) / 2,
+            top: to.bottom,
+          },
+    );
   }, [phase, poolSize]);
 
   useLayoutEffect(() => {
@@ -285,23 +271,14 @@ export default function App() {
           },
         ],
         {
-          duration: 520,
-          delay: (index % 6) * 15,
+          duration: Math.max(0, remaining(ROLL_TIMING.total) - (index % 6) * 6),
+          delay: (index % 6) * 6,
           easing: "cubic-bezier(.45, 0, .8, .45)",
           fill: "forwards",
         },
       );
     });
-    let active = true;
-    void Promise.all(animations.map((animation) => animation.finished))
-      .then(() => {
-        if (active) setPhase("total");
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-      animations.forEach((animation) => animation.cancel());
-    };
+    return () => animations.forEach((animation) => animation.cancel());
   }, [phase]);
 
   useLayoutEffect(() => {
@@ -332,22 +309,13 @@ export default function App() {
         { transform: `translate(${x}px, ${y}px) scale(.55)`, opacity: 0.8 },
       ],
       {
-        duration: 700,
+        duration: remaining(ROLL_TIMING.collected),
         easing: "cubic-bezier(.4, 0, .35, 1)",
         fill: "forwards",
       },
     );
-    let active = true;
-    void animation.finished
-      .then(() => {
-        if (active) setPhase("collected");
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-      animation.cancel();
-    };
-  }, [phase]);
+    return () => animation.cancel();
+  }, [phase, poolSize]);
   useEffect(() => {
     if (modal) {
       if (!dialog.current?.open) {
@@ -365,14 +333,31 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [message]);
 
+  function remaining(at: number) {
+    return Math.max(0, at - (performance.now() - rollStartedAt.current));
+  }
+  function commitRoll() {
+    if (!pendingRoll.current) return;
+    gameRef.current = pendingRoll.current;
+    setGame(pendingRoll.current);
+    pendingRoll.current = null;
+  }
+  function skip() {
+    if (!busy.current) return;
+    commitRoll();
+    busy.current = false;
+    setPhase("idle");
+  }
   function roll() {
     if (busy.current || modal) return;
     busy.current = true;
+    pendingRoll.current = rollGame(gameRef.current);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setGame(rollGame(game));
+      commitRoll();
       busy.current = false;
       return;
     }
+    rollStartedAt.current = performance.now();
     setPhase("rolling");
   }
   function buy(id: DieId) {
@@ -507,6 +492,14 @@ export default function App() {
         >
           <div ref={levelTarget} className="level-target">
             <LevelText level={displayedLevel} live />
+            {last && (
+              <span
+                ref={reward}
+                className={`earned-reward ${phase !== "reward" ? "reward-departed" : ""}`}
+              >
+                +{last.reward} <Coin />
+              </span>
+            )}
           </div>
           <section
             ref={diceField}
@@ -553,14 +546,6 @@ export default function App() {
                 <strong data-testid="roll-total" />
               )}
             </div>
-            {last && (
-              <span
-                ref={reward}
-                className={`earned-reward ${phase !== "reward" ? "reward-departed" : ""}`}
-              >
-                +{last.reward} <Coin />
-              </span>
-            )}
           </section>
           {phase === "targeting" && last && (
             <div ref={totalFlight} className="total-flight" aria-hidden="true">
@@ -590,14 +575,14 @@ export default function App() {
             className="roll-button"
             aria-label={
               rolling
-                ? "Rolling…"
+                ? "Skip animation"
                 : `Roll your ${stats.count === 1 ? "die" : "dice"}`
             }
-            disabled={rolling || modal === "recovery"}
-            onClick={roll}
+            disabled={modal === "recovery"}
+            onClick={rolling ? skip : roll}
           >
-            <span aria-hidden="true">↻</span>
-            {rolling ? "ROLLING…" : "ROLL"}
+            <span aria-hidden="true">{rolling ? "»" : "↻"}</span>
+            {rolling ? "SKIP" : "ROLL"}
           </button>
         </div>
         <div className="save-status">
