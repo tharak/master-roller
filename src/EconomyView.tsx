@@ -465,7 +465,7 @@ export default function EconomyView() {
             <h2 id="income-heading">When can we afford the next die?</h2>
             <p>
               Save for d6 → d8 → d10 → d12 → d20 → d100, buying one slot with
-              each die. No repeat dice or Test Lab grants.
+              each die. No merges, repeat dice or Test Lab grants.
             </p>
           </div>
           <span className="simulation-status" role="status">

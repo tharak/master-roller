@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DICE, newGame, rollGame, simulatePurchase } from "../../src/game";
+import {
+  DICE,
+  newGame,
+  rollGame,
+  simulatePurchase,
+  mergeDice,
+} from "../../src/game";
 import { loadGame, saveGame, validSave } from "../../src/storage";
 
 describe("save validation and recovery", () => {
@@ -29,6 +35,27 @@ describe("save validation and recovery", () => {
       state: newGame(),
       status: "saved",
     });
+  });
+  it("round-trips a merge after rolling without stale consumed dice", () => {
+    const rolled = rollGame(
+      { ...newGame(), slots: 2, inventory: { ...newGame().inventory, d4: 2 } },
+      () => 0.99,
+    );
+    const merged = mergeDice(rolled, "d4", "d4");
+    expect(merged.lastRoll).toBeNull();
+    expect(merged).toMatchObject({
+      version: 2,
+      level: 2,
+      balance: 8,
+      slots: 2,
+      inventory: { d4: 0, d8: 1 },
+    });
+    expect(validSave(merged)).toBe(true);
+    expect(loadGame({ getItem: () => JSON.stringify(merged) })).toEqual({
+      state: merged,
+      status: "saved",
+    });
+    expect(validSave(rollGame(merged, () => 0.99))).toBe(true);
   });
   it.each(["bad json", "{}", "null", '{"version":99}'])(
     "marks corrupt or unsupported data invalid: %s",

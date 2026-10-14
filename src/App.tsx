@@ -8,6 +8,7 @@ import {
 import {
   buyDie,
   buySlot,
+  mergeDice,
   DICE,
   ECONOMY,
   newGame,
@@ -16,12 +17,14 @@ import {
   simulatePurchase,
   slotCost,
   type DieId,
+  type MergeRecipe,
   type TestOffer,
 } from "./game";
 import { loadGame, saveGame, type SaveStatus } from "./storage";
 import DieShape, { DIE_SHAPES } from "./DieShape";
 import Shatter from "./Shatter";
 import EconomyView from "./EconomyView";
+import MergeShop from "./MergeShop";
 import { ROLL_TIMING, type RollPhase } from "./rollAnimation";
 
 const number = (value: number) => value.toLocaleString("en-US");
@@ -399,6 +402,13 @@ export default function App() {
     setGame((current) => buySlot(current));
     setMessage("+1 dice slot");
   }
+  function merge(recipe: MergeRecipe) {
+    if (busy.current) return;
+    setGame((current) => mergeDice(current, ...recipe.inputs));
+    setMessage(
+      `Merged ${recipe.inputs.join(" + ")} into ${recipe.output}. One slot freed.`,
+    );
+  }
   function testBuy(offer: TestOffer) {
     if (busy.current) return;
     setGame((current) => simulatePurchase(current, offer));
@@ -724,6 +734,7 @@ export default function App() {
                 </article>
               ))}
             </div>
+            <MergeShop game={game} rolling={rolling} onMerge={merge} />
             <div className="shop-bottom">
               <p className="purchase-feedback" role="status">
                 {message}
@@ -804,6 +815,12 @@ export default function App() {
             <p className="modal-copy">
               Dice roll 1 through their face count. Buy an empty slot before
               adding another die.
+            </p>
+            <p className="modal-copy">
+              In the shop, merge two dice for free when their maximums add up to
+              another die’s maximum. For example, d4 + d4 becomes d8. Merging
+              frees a slot and keeps the same maximum total, with 0.5 less
+              average income per roll.
             </p>
             <a
               className="text-button"

@@ -569,6 +569,68 @@ p {
   flex-wrap: wrap;
   margin-top: 16px;
 }
+.merge-shop {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #ffffff12;
+}
+.merge-shop h3 {
+  font: 600 15px var(--display);
+}
+.merge-shop p {
+  color: #b8b4cb;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+.merge-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.merge-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1px solid #b7ce7044;
+  border-radius: 10px;
+  background: #d7ed9810;
+}
+.merge-option:hover:enabled {
+  background: #d7ed9820;
+}
+.merge-equation,
+.merge-term {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.merge-die {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 40px;
+  color: var(--die-color);
+}
+.merge-die .die-value {
+  font-size: 15px;
+}
+.merge-symbol {
+  color: #b8b4cb;
+  font-size: 16px;
+}
+.merge-action {
+  color: #e1f5b7;
+  font: 600 12px var(--display);
+}
+.merge-shop .merge-note {
+  font-size: 10px;
+  color: #9a9daf;
+}
 .text-button {
   background: transparent;
   color: #c6b6e6;
