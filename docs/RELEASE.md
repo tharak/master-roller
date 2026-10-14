@@ -1,5 +1,15 @@
 # Mobile Web Test Release — v0.1.0
 
+## Economy and analysis update — #21
+
+Current rules supersede the historical baselines below: start with one d4 and one slot; supported dice are d4/d6/d8/d10/d12/d20/d100; extra slots cost a flat 50 Dicecoin; each roll earns its total, on wins and losses. Die prices remain 50/70/90/110/130/210/1010 while the economy lab offers separate editable drafts.
+
+The lab graphs all possible faces, exact pool probabilities, and seeded upgrade affordability including slots. At default prices, the first d6 plus slot costs 120, with median purchase roll 49 and 41 median rolls at an unreachable level. Cumulative cost through d100 is 1,920, purchased on median roll 144. Simulation assumptions and capped-run counts are shown in the view.
+
+Version 1 saves are backed up before migration to version 2. Removed dice become d4, capacity is granted for the existing collection, level/balance are kept, and obsolete last-roll history is cleared with a visible notice. Invalid saves are not overwritten.
+
+Validation: 47 unit checks, 44 desktop/mobile browser checks, production build/type checking, and 200 progression simulations through level 100. d4-only buying averages 202.5 rolls / 102.5 losses / 68.2 dice and slot purchases; buying each next die then repeat d100 averages 206.5 rolls / 106.5 losses / 26.5 purchases. A separate 200-seed run supplies lab upgrade windows. Both progression strategies use only earned coins.
+
 Game: https://tharak.github.io/master-roller/
 
 Milestone: https://github.com/tharak/master-roller/milestone/1

@@ -1,8 +1,6 @@
 import type { DieId } from "./game";
 
 export const DIE_SHAPES: Record<DieId, string> = {
-  d2: "coin",
-  d3: "triangular prism",
   d4: "pyramid",
   d6: "cube",
   d8: "octahedron",
@@ -15,27 +13,6 @@ export const DIE_SHAPES: Record<DieId, string> = {
 export default function DieShape({ id }: { id: DieId }) {
   const geometry = (() => {
     switch (id) {
-      case "d2":
-        return (
-          <>
-            <circle className="shape-base" cx="50" cy="53" r="43" />
-            <circle className="shape-front" cx="50" cy="48" r="43" />
-            <circle className="shape-detail" cx="50" cy="48" r="34" />
-            <path
-              className="shape-detail"
-              d="M19 76 21 83M32 85 33 91M47 89 47 96M62 87 63 94M75 81 77 87"
-            />
-          </>
-        );
-      case "d3":
-        return (
-          <>
-            <path className="shape-base" d="M15 10 65 10 100 50 65 90 15 90Z" />
-            <path className="shape-front" d="M15 10 65 10 100 50 50 50Z" />
-            <path className="shape-light" d="M15 10 50 50 15 90Z" />
-            <path className="shape-detail" d="M50 50 65 90M50 50 100 50" />
-          </>
-        );
       case "d4":
         return (
           <>

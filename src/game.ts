@@ -1,13 +1,4 @@
 export const DICE = [
-  { id: "d2", min: 0, max: 1, price: 10, name: "The beginner", color: "lime" },
-  {
-    id: "d3",
-    min: 1,
-    max: 3,
-    price: 40,
-    name: "A little extra",
-    color: "mint",
-  },
   {
     id: "d4",
     min: 1,
@@ -59,8 +50,14 @@ export const DICE = [
   },
 ] as const;
 export type DieId = (typeof DICE)[number]["id"];
-export const ECONOMY = { loss: 10, win: 20, coinPack: 10_000 } as const;
+export const ECONOMY = { slotPrice: 50, coinPack: 10_000 } as const;
+export const LEGACY_DICE = [
+  { id: "d2", min: 0, max: 1 },
+  { id: "d3", min: 1, max: 3 },
+] as const;
+export const LEGACY_REWARDS = { win: 20, loss: 10 } as const;
 export const SAVE_KEY = "master-roller:save";
+export const LEGACY_SAVE_KEY = "master-roller:save:v1-backup";
 export interface RollResult {
   level: number;
   dice: { id: DieId; values: number[] }[];
@@ -69,7 +66,8 @@ export interface RollResult {
   reward: number;
 }
 export interface GameState {
-  version: 1;
+  version: 2;
+  slots: number;
   level: number;
   balance: number;
   inventory: Record<DieId, number>;
@@ -77,9 +75,16 @@ export interface GameState {
 }
 export function newGame(): GameState {
   const inventory = Object.fromEntries(
-    DICE.map((die) => [die.id, die.id === "d2" ? 1 : 0]),
+    DICE.map((die) => [die.id, die.id === "d4" ? 1 : 0]),
   ) as GameState["inventory"];
-  return { version: 1, level: 1, balance: 0, inventory, lastRoll: null };
+  return {
+    version: 2,
+    slots: 1,
+    level: 1,
+    balance: 0,
+    inventory,
+    lastRoll: null,
+  };
 }
 export function rollGame(
   state: GameState,
@@ -99,7 +104,7 @@ export function rollGame(
     0,
   );
   const won = total >= state.level;
-  const reward = won ? ECONOMY.win : ECONOMY.loss;
+  const reward = total;
   return {
     ...state,
     level: state.level + Number(won),
@@ -109,11 +114,28 @@ export function rollGame(
 }
 export function buyDie(state: GameState, id: DieId): GameState {
   const die = DICE.find((d) => d.id === id);
-  if (!die || state.balance < die.price) return state;
+  if (
+    !die ||
+    state.balance < die.price ||
+    poolStats(state).count >= state.slots
+  )
+    return state;
   return {
     ...state,
     balance: state.balance - die.price,
     inventory: { ...state.inventory, [id]: state.inventory[id] + 1 },
+  };
+}
+export function buySlot(state: GameState): GameState {
+  if (
+    state.balance < ECONOMY.slotPrice ||
+    !Number.isSafeInteger(state.slots + 1)
+  )
+    return state;
+  return {
+    ...state,
+    balance: state.balance - ECONOMY.slotPrice,
+    slots: state.slots + 1,
   };
 }
 export type TestOffer = DieId | "coins";
@@ -123,7 +145,11 @@ export function simulatePurchase(
 ): GameState {
   if (offer === "coins")
     return { ...state, balance: state.balance + ECONOMY.coinPack };
-  if (!DICE.some((d) => d.id === offer)) return state;
+  if (
+    !DICE.some((d) => d.id === offer) ||
+    poolStats(state).count >= state.slots
+  )
+    return state;
   return {
     ...state,
     inventory: { ...state.inventory, [offer]: state.inventory[offer] + 1 },

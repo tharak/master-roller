@@ -1,59 +1,55 @@
 import {
   buyDie,
+  buySlot,
   DICE,
+  ECONOMY,
   newGame,
   poolStats,
   rollGame,
-  type GameState,
 } from "../src/game";
+import { analyzeEconomy, defaultPrices, seededRandom } from "../src/economy";
 
-function seededRandom(seed: number) {
-  return () => {
-    seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-}
-type Strategy = "d2-only" | "save-for-d20";
+type Strategy = "d4-only" | "next-die";
 function simulate(seed: number, strategy: Strategy) {
-  let game: GameState = newGame();
-  let rolls = 0,
+  let game = newGame(),
+    rolls = 0,
     losses = 0,
-    purchases = 0;
+    purchases = 0,
+    slotsBought = 0;
   const random = seededRandom(seed);
   while (game.level <= 100 && rolls < 100_000) {
     game = rollGame(game, random);
     rolls++;
     if (!game.lastRoll!.won) losses++;
-    // No test purchases. Compare immediate d2 spending against saving for d20,
-    // buying a fallback d2 only when the next level is otherwise unreachable.
-    if (strategy === "d2-only") {
-      while (game.balance >= DICE[0].price) {
-        game = buyDie(game, "d2");
-        purchases++;
+    const next =
+      strategy === "d4-only"
+        ? DICE[0]
+        : (DICE.find((die) => game.inventory[die.id] === 0) ?? DICE.at(-1)!);
+    const slotNeeded = poolStats(game).count >= game.slots;
+    if (game.balance >= next.price + (slotNeeded ? ECONOMY.slotPrice : 0)) {
+      if (slotNeeded) {
+        game = buySlot(game);
+        slotsBought++;
       }
-    } else {
-      while (game.balance >= DICE[7].price) {
-        game = buyDie(game, "d20");
-        purchases++;
-      }
-      if (poolStats(game).max < game.level && game.balance >= DICE[0].price) {
-        game = buyDie(game, "d2");
-        purchases++;
-      }
+      game = buyDie(game, next.id);
+      purchases++;
     }
   }
   if (game.level <= 100)
     throw new Error(`${strategy}, seed ${seed}: did not clear level 100.`);
-  return { rolls, losses, purchases, dice: poolStats(game).count };
+  return { rolls, losses, purchases, slotsBought, dice: poolStats(game).count };
 }
 console.log(
-  "Progression through level 100. Fixed prices; no test purchases. 100 seeds per strategy.",
+  "Progression through level 100. Roll-total earnings, fixed live prices, 50-coin slots; no test purchases. 100 seeds per strategy.",
 );
-for (const strategy of ["d2-only", "save-for-d20"] as const) {
-  const runs = Array.from({ length: 100 }, (_, i) => simulate(i + 1, strategy));
+for (const strategy of ["d4-only", "next-die"] as const) {
+  const runs = Array.from({ length: 100 }, (_, index) =>
+    simulate(index + 1, strategy),
+  );
   const mean = (key: keyof (typeof runs)[number]) =>
-    Math.round((runs.reduce((sum, r) => sum + r[key], 0) / runs.length) * 10) /
-    10;
+    Math.round(
+      (runs.reduce((sum, run) => sum + run[key], 0) / runs.length) * 10,
+    ) / 10;
   console.log(
     JSON.stringify({
       strategy,
@@ -61,8 +57,13 @@ for (const strategy of ["d2-only", "save-for-d20"] as const) {
       averageRolls: mean("rolls"),
       averageLosses: mean("losses"),
       averagePurchases: mean("purchases"),
+      averageSlotsBought: mean("slotsBought"),
       averageDice: mean("dice"),
-      maxRolls: Math.max(...runs.map((r) => r.rolls)),
+      maxRolls: Math.max(...runs.map((run) => run.rolls)),
     }),
   );
 }
+console.log(
+  "Upgrade affordability: one of each next die, including its slot, 200 seeds.",
+);
+console.log(JSON.stringify(analyzeEconomy(defaultPrices()).upgrades));
