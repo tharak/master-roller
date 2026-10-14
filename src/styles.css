@@ -272,15 +272,6 @@ p {
 .die-d2 {
   --die-color: #e6c576;
 }
-.die-type {
-  position: absolute;
-  top: 24%;
-  left: 50%;
-  translate: -50% 0;
-  font: 500 clamp(7px, calc(var(--die-size, 82px) * 0.12), 10px) var(--display);
-  opacity: 0.75;
-  z-index: 1;
-}
 .die-value {
   position: absolute;
   left: 50%;
@@ -297,56 +288,31 @@ p {
   top: 59%;
   font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
-.die-d3 .die-type,
-.die-d6 .die-type {
-  left: 35%;
-  top: 35%;
-}
 .die-d4 .die-value {
   left: 43%;
   top: 67%;
   font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
-}
-.die-d4 .die-type {
-  left: 43%;
-  top: 43%;
 }
 .die-d8 .die-value {
   left: 44%;
   top: 46%;
   font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
-.die-d8 .die-type {
-  left: 44%;
-  top: 25%;
-}
 .die-d10 .die-value {
   top: 54%;
   font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
-}
-.die-d10 .die-type {
-  top: 30%;
 }
 .die-d12 .die-value {
   top: 52%;
   font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
-.die-d12 .die-type {
-  top: 30%;
-}
 .die-d20 .die-value {
   top: 56%;
   font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
-.die-d20 .die-type {
-  top: 34%;
-}
 .die-d100 .die-value {
   top: 53%;
   font-size: min(30px, calc(var(--die-size, 82px) * 0.37));
-}
-.die-d100 .die-type {
-  top: 25%;
 }
 .play-die:nth-child(even) {
   transform: rotate(5deg);
@@ -356,9 +322,6 @@ p {
 }
 .single-die .play-die {
   transform: rotate(-9deg);
-}
-.single-die .die-type {
-  font-size: 14px;
 }
 .single-die .die-value {
   font-size: min(52px, calc(var(--die-size, 126px) * 0.42));
@@ -991,30 +954,10 @@ p {
   place-items: center;
   color: var(--die-color);
 }
-.shop-die-type > strong {
-  position: relative;
-  z-index: 1;
-  font: 600 17px var(--display);
-  letter-spacing: -0.5px;
-  translate: 0 3px;
-}
 .shop-die-type .owned {
   right: 0;
   top: -6px;
   z-index: 2;
-}
-.shop-die-type.die-d3 > strong,
-.shop-die-type.die-d6 > strong {
-  translate: -10px 8px;
-}
-.shop-die-type.die-d4 > strong {
-  translate: -5px 17px;
-}
-.shop-die-type.die-d8 > strong {
-  translate: -5px 0;
-}
-.shop-die-type.die-d20 > strong {
-  translate: 0 9px;
 }
 .die-range {
   text-align: center;
@@ -1028,21 +971,8 @@ p {
   left: 57%;
   top: 43%;
 }
-.play-die.die-d3 .die-type {
-  left: 55%;
-  top: 14%;
-}
 .play-die.die-d4 .die-value {
   top: 64%;
-}
-.play-die.die-d4 .die-type {
-  top: 35%;
-}
-.shop-die-type.die-d3 > strong {
-  translate: 7px -7px;
-}
-.shop-die-type.die-d4 > strong {
-  translate: -4px 7px;
 }
 
 .hud > * {

@@ -375,7 +375,6 @@ export default function App() {
                   aria-label={`${die.id} ${value === undefined ? "not rolled yet" : `rolled ${value}`}`}
                 >
                   <DieShape id={die.id} />
-                  <span className="die-type">{die.id}</span>
                   <strong className="die-value">
                     {phase === "rolling"
                       ? "·"
@@ -493,7 +492,6 @@ export default function App() {
                     aria-description={DIE_SHAPES[die.id]}
                   >
                     <DieShape id={die.id} />
-                    <strong>{die.id}</strong>
                     <span className="owned">
                       ×{number(game.inventory[die.id])}
                     </span>
