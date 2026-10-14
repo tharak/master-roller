@@ -190,6 +190,12 @@ p {
   font: 600 11px var(--display);
   letter-spacing: 4px;
 }
+.level-copy {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
 .target-value {
   font: 600 11px var(--display);
   letter-spacing: 1px;
@@ -804,6 +810,9 @@ p {
   animation: none;
 }
 .phase-total .play-die,
+.phase-targeting .play-die,
+.phase-impact .play-die,
+.phase-leveling .play-die,
 .phase-reward .play-die,
 .phase-crediting .play-die,
 .phase-collected .play-die {
@@ -828,13 +837,120 @@ p {
   z-index: 2;
   text-align: center;
 }
-.sum-burst > strong {
-  font: 700 clamp(56px, 16vw, 94px) var(--display);
-  line-height: 1.1;
-  letter-spacing: -4px;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  text-shadow: 0 0 40px #b0a1ff55;
+.result-die {
+  --die-size: min(170px, 42vmin);
+  position: relative;
+  width: var(--die-size);
+  height: calc(var(--die-size) * 1.1);
+  color: var(--die-color);
+  filter: drop-shadow(
+    0 0 20px color-mix(in srgb, var(--die-color) 25%, transparent)
+  );
+}
+.result-die .die-value {
+  font-size: min(64px, calc(var(--die-size) * var(--value-ratio)));
+}
+.total-flight {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  z-index: 6;
+  pointer-events: none;
+  will-change: transform;
+}
+.impact-shatter {
+  position: fixed;
+  z-index: 6;
+  pointer-events: none;
+  color: #acafc7;
+}
+.impact-shard {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: shatter 500ms ease-out both;
+}
+.impact-shatter::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 75px;
+  height: 75px;
+  translate: -50% -50%;
+  border: 2px solid #dbff78;
+  border-radius: 50%;
+  box-shadow: 0 0 22px #dbff7844;
+  animation: impact-ring 450ms ease-out both;
+}
+.total-shatter::before {
+  border-color: #efad77;
+  box-shadow: 0 0 22px #efad7744;
+}
+.phase-impact.roll-win .level-target > .level-copy {
+  opacity: 0;
+}
+.phase-impact.roll-win .level-target {
+  background: transparent;
+}
+.phase-impact.roll-loss .level-target {
+  animation: level-resist 350ms ease-out;
+}
+.phase-leveling .level-target > .level-copy {
+  animation: level-arrive 300ms ease-out both;
+}
+@keyframes shatter {
+  from {
+    transform: translate(0, 0) rotate(0);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--shard-x), var(--shard-y))
+      rotate(var(--shard-turn));
+    opacity: 0;
+  }
+}
+@keyframes impact-ring {
+  from {
+    scale: 0.2;
+    opacity: 1;
+  }
+  to {
+    scale: 1.6;
+    opacity: 0;
+  }
+}
+@keyframes level-resist {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+@keyframes level-arrive {
+  from {
+    opacity: 0;
+    scale: 0.65;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+    filter: blur(0);
+  }
 }
 .sum-visible {
   opacity: 1;
@@ -935,7 +1051,7 @@ p {
 .earned-reward {
   position: absolute;
   left: 50%;
-  top: calc(50% + 85px);
+  top: calc(50% + min(110px, 20vh));
   translate: -50% 0;
   display: flex;
   align-items: center;
@@ -964,14 +1080,17 @@ p {
   margin: 8px 0 10px;
 }
 
-.play-die.die-d2 {
+.play-die.die-d2,
+.result-die.die-d2 {
   --die-color: #e6c576;
 }
-.play-die.die-d3 .die-value {
+.play-die.die-d3 .die-value,
+.result-die.die-d3 .die-value {
   left: 57%;
   top: 43%;
 }
-.play-die.die-d4 .die-value {
+.play-die.die-d4 .die-value,
+.result-die.die-d4 .die-value {
   top: 64%;
 }
 

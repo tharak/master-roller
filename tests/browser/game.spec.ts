@@ -420,17 +420,62 @@ test("large collections still roll every die and expose all die types", async ({
 });
 
 for (const scenario of [
-  { name: "win", random: 0.99, earned: 20, total: 1, level: 2 },
-  { name: "loss", random: 0, earned: 10, total: 0, level: 1 },
+  {
+    name: "exact-target win",
+    random: 0.99,
+    count: 1,
+    face: 1,
+    earned: 20,
+    total: 1,
+    level: 2,
+  },
+  {
+    name: "overshoot win",
+    random: 0.99,
+    count: 2,
+    face: 1,
+    earned: 20,
+    total: 2,
+    level: 2,
+  },
+  {
+    name: "loss",
+    random: 0,
+    count: 1,
+    face: 0,
+    earned: 10,
+    total: 0,
+    level: 1,
+  },
 ]) {
-  test(`${scenario.name}: dice gather before the sum and coins credit only on arrival`, async ({
+  test(`${scenario.name}: result die hits the level, breaks the right target, then credits coins`, async ({
     page,
   }) => {
     await page.clock.install();
     await page.clock.pauseAt(new Date());
-    await page.addInitScript((value) => {
-      Math.random = () => value;
-    }, scenario.random);
+    await page.addInitScript(({ random, count }) => {
+      Math.random = () => random;
+      localStorage.setItem(
+        "master-roller:save",
+        JSON.stringify({
+          version: 1,
+          level: 1,
+          balance: 0,
+          lastRoll: null,
+          inventory: {
+            d2: count,
+            d3: 0,
+            d4: 0,
+            d6: 0,
+            d8: 0,
+            d10: 0,
+            d12: 0,
+            d20: 0,
+            d100: 0,
+          },
+        }),
+      );
+    }, scenario);
     await page.goto("./");
     const arena = page.getByRole("region", { name: "Roll arena" });
     const wallet = page.getByRole("button", {
@@ -443,13 +488,16 @@ for (const scenario of [
     await expect(page.getByRole("dialog", { name: "Dice shop" })).toBeVisible();
     await section(page, "Play");
     await page
-      .getByRole("button", { name: "Roll your die", exact: true })
+      .getByRole("button", {
+        name: scenario.count === 1 ? "Roll your die" : "Roll your dice",
+        exact: true,
+      })
       .click();
     await page.clock.fastForward(550);
     await expect(arena).toHaveAttribute("data-phase", "faces");
     await expect(
-      page.getByLabel(`d2 rolled ${scenario.total}`, { exact: true }),
-    ).toBeVisible();
+      page.getByLabel(`d2 rolled ${scenario.face}`, { exact: true }),
+    ).toHaveCount(scenario.count);
     await expect(wallet).toBeDisabled();
     await expect(page.getByTestId("target")).toHaveText("1");
     // Complete state is durable during the visual sequence, but the visible money is withheld.
@@ -473,9 +521,67 @@ for (const scenario of [
     await expect(page.locator(".sum-burst strong")).toHaveText(
       String(scenario.total),
     );
+    await expect(page.locator(".sum-burst .result-die svg")).toHaveAttribute(
+      "data-die-shape",
+      "coin",
+    );
     await expect(wallet).toBeVisible();
-    await page.clock.fastForward(350);
+    await page.clock.fastForward(450);
+    await expect(arena).toHaveAttribute("data-phase", "targeting");
+    await expect(page.locator(".total-flight .result-die")).toContainText(
+      String(scenario.total),
+    );
+    // Inspect the actual end position before letting the flight finish.
+    const collision = await page
+      .locator(".total-flight")
+      .evaluate((element) => {
+        const animation = element.getAnimations()[0];
+        animation.pause();
+        animation.currentTime = 600;
+        const die = element.getBoundingClientRect();
+        const level = document
+          .querySelector(".level-target > .level-copy")!
+          .getBoundingClientRect();
+        const result = {
+          centerGap: Math.abs(
+            die.left + die.width / 2 - level.left - level.width / 2,
+          ),
+          edgeGap: Math.abs(die.top - level.bottom),
+        };
+        animation.play();
+        return result;
+      });
+    expect(collision.centerGap).toBeLessThan(1);
+    expect(collision.edgeGap).toBeLessThan(1);
+    await expect(arena).toHaveAttribute("data-phase", "impact");
+    await expect(page.locator(".total-flight")).toHaveCount(0);
+    await expect(page.locator(".impact-shard")).toHaveCount(12);
+    await expect(page.getByTestId("target")).toHaveText("1");
+    if (scenario.earned === 20) {
+      await expect(page.locator(".level-shatter")).toContainText("LEVEL");
+      await expect(page.locator(".level-target > .level-copy")).toHaveCSS(
+        "opacity",
+        "0",
+      );
+    } else {
+      await expect(page.locator(".total-shatter .result-die")).toHaveCount(12);
+      await expect(page.locator(".level-target > .level-copy")).toHaveCSS(
+        "opacity",
+        "1",
+      );
+    }
+    await expect(wallet).toBeVisible();
+    await expect(wallet).toBeDisabled();
+    await page.clock.fastForward(500);
+    if (scenario.earned === 20) {
+      await expect(arena).toHaveAttribute("data-phase", "leveling");
+      await expect(page.getByTestId("target")).toHaveText("2");
+      await expect(wallet).toBeVisible();
+      await page.clock.fastForward(300);
+    }
     await expect(arena).toHaveAttribute("data-phase", "reward");
+    await expect(page.locator(".impact-shatter")).toHaveCount(0);
+    await expect(page.getByTestId("roll-total")).toBeEmpty();
     await expect(page.locator(".earned-reward")).toContainText(
       `+${scenario.earned}`,
     );
@@ -497,11 +603,123 @@ for (const scenario of [
     await expect(page.getByTestId("roll-total")).toBeEmpty();
     await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
     await expect(
-      page.getByLabel(`d2 rolled ${scenario.total}`, { exact: true }),
-    ).toBeVisible();
+      page.getByLabel(`d2 rolled ${scenario.face}`, { exact: true }),
+    ).toHaveCount(scenario.count);
     await expect(
-      page.getByRole("button", { name: "Roll your die", exact: true }),
+      page.getByRole("button", {
+        name: scenario.count === 1 ? "Roll your die" : "Roll your dice",
+        exact: true,
+      }),
     ).toBeEnabled();
+  });
+}
+
+test("gathered total uses the highest-sided owned die and follows the resized level", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  await page.addInitScript(() => {
+    Math.random = () => 0.99;
+    localStorage.setItem(
+      "master-roller:save",
+      JSON.stringify({
+        version: 1,
+        level: 1,
+        balance: 0,
+        lastRoll: null,
+        inventory: {
+          d2: 2,
+          d3: 0,
+          d4: 1,
+          d6: 0,
+          d8: 0,
+          d10: 0,
+          d12: 0,
+          d20: 1,
+          d100: 0,
+        },
+      }),
+    );
+  });
+  await page.goto("./");
+  const arena = page.getByRole("region", { name: "Roll arena" });
+  await page
+    .getByRole("button", { name: "Roll your dice", exact: true })
+    .click();
+  await page.clock.fastForward(550);
+  await page.clock.fastForward(280);
+  await expect(arena).toHaveAttribute("data-phase", "total");
+  await expect(page.getByTestId("roll-total")).toHaveText("26");
+  await expect(page.locator(".sum-burst .result-die svg")).toHaveAttribute(
+    "data-die-shape",
+    "icosahedron",
+  );
+  await expect(page.locator(".sum-burst .result-die")).toHaveText("26");
+  const bounds = await page.locator(".sum-burst .result-die").boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(
+    Math.abs(bounds!.x + bounds!.width / 2 - viewport.width / 2),
+  ).toBeLessThan(1);
+  expect(
+    Math.abs(bounds!.y + bounds!.height / 2 - viewport.height / 2),
+  ).toBeLessThan(1);
+  await page.clock.fastForward(450);
+  await expect(arena).toHaveAttribute("data-phase", "targeting");
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(arena).toHaveAttribute("data-phase", "impact");
+  const shards = await page.locator(".level-shatter").boundingBox();
+  const target = await page
+    .locator(".level-target > .level-copy")
+    .boundingBox();
+  expect(shards!.x).toBeCloseTo(target!.x, 0);
+  expect(shards!.y).toBeCloseTo(target!.y, 0);
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
+    ),
+  ).toBe(20);
+});
+
+for (const phase of ["targeting", "impact"] as const) {
+  test(`refresh during ${phase} restores one result and clears the visual sequence`, async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+    await page.addInitScript(() => {
+      Math.random = () => 0.99;
+    });
+    await page.goto("./");
+    const arena = page.getByRole("region", { name: "Roll arena" });
+    await page
+      .getByRole("button", { name: "Roll your die", exact: true })
+      .click();
+    await page.clock.fastForward(550);
+    await page.clock.fastForward(280);
+    await expect(arena).toHaveAttribute("data-phase", "total");
+    await page.clock.fastForward(450);
+    await expect(arena).toHaveAttribute("data-phase", phase);
+    await page.reload();
+    await expect(arena).toHaveAttribute("data-phase", "idle");
+    await expect(page.getByTestId("target")).toHaveText("2");
+    await expect(
+      page.getByRole("button", { name: "20 Dicecoin", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByTestId("roll-total")).toBeEmpty();
+    await expect(
+      page.locator(".total-flight, .impact-shatter, .reward-flight"),
+    ).toHaveCount(0);
+    await page.clock.fastForward(10000);
+    expect(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
+      ),
+    ).toBe(20);
+    await page.getByRole("button", { name: "How to play" }).click();
+    await expect(
+      page.getByRole("dialog").getByText("Last roll · 1"),
+    ).toBeVisible();
   });
 }
 
@@ -522,7 +740,12 @@ test("refresh during the reward flight preserves exactly one reward", async ({
   await expect(arena).toHaveAttribute("data-phase", "faces");
   await page.clock.fastForward(280);
   await expect(arena).toHaveAttribute("data-phase", "total");
-  await page.clock.fastForward(350);
+  await page.clock.fastForward(450);
+  await expect(arena).toHaveAttribute("data-phase", "impact");
+  await page.clock.fastForward(500);
+  await expect(arena).toHaveAttribute("data-phase", "leveling");
+  await page.clock.fastForward(300);
+  await expect(arena).toHaveAttribute("data-phase", "reward");
   await page.clock.fastForward(500);
   await expect(arena).toHaveAttribute("data-phase", "crediting");
   await expect(
