@@ -47,7 +47,7 @@ test("merging after a roll frees space without charge and survives reload", asyn
       JSON.parse(localStorage.getItem("master-roller:save")!),
     ),
   ).toMatchObject({
-    version: 2,
+    version: 3,
     balance: 8,
     level: 2,
     slots: 2,

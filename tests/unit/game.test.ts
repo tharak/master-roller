@@ -9,6 +9,8 @@ import {
   rollGame,
   simulatePurchase,
   slotCost,
+  dieCost,
+  exponentialCost,
   MERGE_RECIPES,
   availableMerges,
   mergeDice,
@@ -18,7 +20,7 @@ import {
 describe("roll engine", () => {
   it("starts with one d4 in one slot and no coins", () => {
     const game = newGame();
-    expect(game).toMatchObject({ version: 2, slots: 1, level: 1, balance: 0 });
+    expect(game).toMatchObject({ version: 3, slots: 1, level: 1, balance: 0 });
     expect(poolStats(game)).toEqual({ count: 1, min: 1, max: 4 });
     expect(DICE.map((die) => die.id)).toEqual([
       "d4",
@@ -171,38 +173,72 @@ describe("dice merging", () => {
   });
 });
 describe("slots and purchases", () => {
-  it("charges 3, 6, 9 for consecutive slots and preserves dice", () => {
-    const initial = { ...newGame(), balance: 18 };
+  it("tracks paid purchases by type across merges and free grants", () => {
+    const initial = { ...newGame(), slots: 5, balance: 100 };
+    const first = buyDie(initial, "d4");
+    expect(dieCost(first, "d4")).toBe(10);
+    expect(dieCost(first, "d6")).toBe(7);
+    const merged = mergeDice(first, "d4", "d4");
+    expect(dieCost(merged, "d4")).toBe(10);
+    const granted = simulatePurchase(merged, "d4");
+    expect(granted.purchases).toEqual(merged.purchases);
+    const second = buyDie(granted, "d4");
+    expect(second.balance).toBe(85);
+    expect(second.purchases.d4).toBe(2);
+    expect(dieCost(second, "d4")).toBe(20);
+    expect(initial.purchases.d4).toBe(0);
+  });
+  it("never charges unrepresentable exponential prices", () => {
+    expect(exponentialCost(0, 10000)).toBe(0);
+    expect(exponentialCost(5, 10000)).toBe(Infinity);
+    const dieLimit = {
+      ...newGame(),
+      balance: Number.MAX_SAFE_INTEGER,
+      slots: 2,
+      purchases: { ...newGame().purchases, d4: 100 },
+    };
+    expect(buyDie(dieLimit, "d4")).toBe(dieLimit);
+    const slotLimit = {
+      ...newGame(),
+      slots: 100,
+      balance: Number.MAX_SAFE_INTEGER,
+    };
+    expect(buySlot(slotLimit)).toBe(slotLimit);
+  });
+  it("charges 3, 6, 12 for consecutive slots and preserves dice", () => {
+    const initial = { ...newGame(), balance: 21 };
     const second = buySlot(initial);
-    expect(second).toMatchObject({ slots: 2, balance: 15 });
+    expect(second).toMatchObject({ slots: 2, balance: 18 });
     const third = buySlot(second);
-    expect(third).toMatchObject({ slots: 3, balance: 9 });
+    expect(third).toMatchObject({ slots: 3, balance: 12 });
     const next = buySlot(third);
     expect(next.slots).toBe(4);
     expect(next.balance).toBe(0);
     expect(next.inventory).toEqual(initial.inventory);
     expect(buySlot(next)).toBe(next);
-    expect(slotCost(next.slots)).toBe(12);
-    const short = { ...next, balance: 11 };
+    expect(slotCost(next.slots)).toBe(24);
+    const short = { ...next, balance: 23 };
     expect(buySlot(short)).toBe(short);
-    // Existing version-2 saves need no new purchase counter.
-    expect(buySlot({ ...next, balance: 12 })).toMatchObject({
+    // Slot prices use purchased capacity even when empty.
+    expect(buySlot({ ...next, balance: 24 })).toMatchObject({
       slots: 5,
       balance: 0,
     });
   });
   it.each(DICE)(
-    "$id costs twice its average and requires a free slot",
+    "$id doubles after a paid purchase and requires a free slot",
     (die) => {
       expect(die.price).toBe(die.min + die.max);
       const full = {
         ...newGame(),
-        balance: die.price * 2 + 9,
+        balance: die.price * 3 + 9,
       };
       expect(buyDie(full, die.id)).toBe(full);
       expect(simulatePurchase(full, die.id)).toBe(full);
       const next = buyDie(buySlot(buyDie(buySlot(full), die.id)), die.id);
       expect(next.balance).toBe(0);
+      expect(dieCost(next, die.id)).toBe(die.price * 4);
+      expect(next.purchases[die.id]).toBe(2);
       expect(next.slots).toBe(3);
       expect(next.inventory[die.id]).toBe(full.inventory[die.id] + 2);
       expect(buyDie(next, die.id)).toBe(next);

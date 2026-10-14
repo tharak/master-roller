@@ -63,12 +63,18 @@ export const MERGE_RECIPES: MergeRecipe[] = DICE.flatMap((left, index) =>
   }),
 );
 export const ECONOMY = { slotPrice: 3, coinPack: 10_000 } as const;
-// The starting slot is free; extra slots cost 1×, 2×, 3×… the base price.
+export function exponentialCost(base: number, purchases: number): number {
+  if (base === 0) return 0;
+  if (purchases > 52) return Infinity;
+  const cost = base * 2 ** purchases;
+  return Number.isSafeInteger(cost) ? cost : Infinity;
+}
+// The starting slot is free; each purchased extra slot doubles the next price.
 export function slotCost(
   ownedSlots: number,
   basePrice: number = ECONOMY.slotPrice,
 ) {
-  return ownedSlots * basePrice;
+  return exponentialCost(basePrice, ownedSlots - 1);
 }
 // Compatibility baseline for untouched drafts saved before the pricing update.
 export const LEGACY_DRAFT_DEFAULTS = {
@@ -82,6 +88,7 @@ export const LEGACY_DICE = [
 export const LEGACY_REWARDS = { win: 20, loss: 10 } as const;
 export const SAVE_KEY = "master-roller:save";
 export const LEGACY_SAVE_KEY = "master-roller:save:v1-backup";
+export const V2_SAVE_KEY = "master-roller:save:v2-backup";
 export interface RollResult {
   level: number;
   dice: { id: DieId; values: number[] }[];
@@ -90,11 +97,12 @@ export interface RollResult {
   reward: number;
 }
 export interface GameState {
-  version: 2;
+  version: 3;
   slots: number;
   level: number;
   balance: number;
   inventory: Record<DieId, number>;
+  purchases: Record<DieId, number>;
   lastRoll: RollResult | null;
 }
 export function newGame(): GameState {
@@ -102,11 +110,14 @@ export function newGame(): GameState {
     DICE.map((die) => [die.id, die.id === "d4" ? 1 : 0]),
   ) as GameState["inventory"];
   return {
-    version: 2,
+    version: 3,
     slots: 1,
     level: 1,
     balance: 0,
     inventory,
+    purchases: Object.fromEntries(
+      DICE.map((die) => [die.id, 0]),
+    ) as GameState["purchases"],
     lastRoll: null,
   };
 }
@@ -140,15 +151,23 @@ export function buyDie(state: GameState, id: DieId): GameState {
   const die = DICE.find((d) => d.id === id);
   if (
     !die ||
-    state.balance < die.price ||
+    !Number.isFinite(dieCost(state, id)) ||
+    state.balance < dieCost(state, id) ||
     poolStats(state).count >= state.slots
   )
     return state;
   return {
     ...state,
-    balance: state.balance - die.price,
+    balance: state.balance - dieCost(state, id),
     inventory: { ...state.inventory, [id]: state.inventory[id] + 1 },
+    purchases: { ...state.purchases, [id]: state.purchases[id] + 1 },
   };
+}
+export function dieCost(state: GameState, id: DieId, base?: number): number {
+  const die = DICE.find((die) => die.id === id);
+  return die
+    ? exponentialCost(base ?? die.price, state.purchases[id])
+    : Infinity;
 }
 export function buySlot(state: GameState): GameState {
   const cost = slotCost(state.slots);

@@ -1,6 +1,8 @@
 import {
   DICE,
   ECONOMY,
+  dieCost,
+  exponentialCost,
   LEGACY_DRAFT_DEFAULTS,
   newGame,
   poolStats,
@@ -66,15 +68,18 @@ export function poolLabel(ids: readonly DieId[]): string {
   }).join(" + ");
 }
 export function comparePool(ids: readonly DieId[], prices: DraftPrices) {
+  const copies = new Map<DieId, number>();
   return ids.reduce(
     (stats, id) => {
       const die = DICE.find((d) => d.id === id)!;
+      const bought = copies.get(id) ?? 0;
+      copies.set(id, bought + 1);
       return {
         slots: stats.slots + 1,
         min: stats.min + die.min,
         max: stats.max + die.max,
         mean: stats.mean + (die.min + die.max) / 2,
-        diceCost: stats.diceCost + prices.dice[id],
+        diceCost: stats.diceCost + exponentialCost(prices.dice[id], bought),
       };
     },
     { slots: 0, min: 0, max: 0, mean: 0, diceCost: 0 },
@@ -215,7 +220,9 @@ export function upgradeRun(
     // Reserve enough for both the next die and its slot. All existing dice keep rolling.
     while (stage < DICE.length - 1) {
       const next = DICE[stage + 1];
-      const cost = prices.dice[next.id] + slotCost(game.slots, prices.slot);
+      const cost =
+        dieCost(game, next.id, prices.dice[next.id]) +
+        slotCost(game.slots, prices.slot);
       if (game.balance < cost) break;
       spent += cost;
       game = {
@@ -225,6 +232,10 @@ export function upgradeRun(
         inventory: {
           ...game.inventory,
           [next.id]: game.inventory[next.id] + 1,
+        },
+        purchases: {
+          ...game.purchases,
+          [next.id]: game.purchases[next.id] + 1,
         },
       };
       events.push({

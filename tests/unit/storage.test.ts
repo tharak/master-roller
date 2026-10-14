@@ -5,6 +5,8 @@ import {
   rollGame,
   simulatePurchase,
   mergeDice,
+  buyDie,
+  dieCost,
 } from "../../src/game";
 import { loadGame, saveGame, validSave } from "../../src/storage";
 
@@ -44,7 +46,7 @@ describe("save validation and recovery", () => {
     const merged = mergeDice(rolled, "d4", "d4");
     expect(merged.lastRoll).toBeNull();
     expect(merged).toMatchObject({
-      version: 2,
+      version: 3,
       level: 2,
       balance: 8,
       slots: 2,
@@ -95,6 +97,23 @@ describe("save validation and recovery", () => {
       validSave({ ...newGame(), inventory: { ...newGame().inventory, d4: 0 } }),
     ).toBe(false);
   });
+  it("rejects absent or invalid purchase counts in version 3", () => {
+    expect(validSave({ ...newGame(), purchases: undefined })).toBe(false);
+    for (const count of [-1, 0.5, Infinity, Number.MAX_SAFE_INTEGER + 1])
+      expect(
+        validSave({
+          ...newGame(),
+          purchases: { ...newGame().purchases, d4: count },
+        }),
+      ).toBe(false);
+  });
+  it("round-trips paid price increases after merging", () => {
+    const purchased = buyDie({ ...newGame(), slots: 2, balance: 5 }, "d4");
+    const merged = mergeDice(purchased, "d4", "d4");
+    const loaded = loadGame({ getItem: () => JSON.stringify(merged) });
+    expect(loaded.status).toBe("saved");
+    expect(dieCost(loaded.state, "d4")).toBe(10);
+  });
   it("rejects invalid result ranges, totals, rewards, and advancement", () => {
     const state = rollGame(newGame(), () => 0.9);
     for (const lastRoll of [
@@ -139,7 +158,7 @@ describe("version 1 migration", () => {
     expect(loaded.status).toBe("saved");
     expect(loaded.legacyBackup).toBe(raw);
     expect(loaded.state).toMatchObject({
-      version: 2,
+      version: 3,
       level: 2,
       balance: 123,
       slots: 8,
@@ -150,7 +169,7 @@ describe("version 1 migration", () => {
     expect("d3" in loaded.state.inventory).toBe(false);
     expect(validSave(loaded.state)).toBe(true);
   });
-  it("backs up the original before writing version 2", () => {
+  it("backs up the original before writing version 3", () => {
     const raw = JSON.stringify(legacy),
       loaded = loadGame({ getItem: () => raw });
     const writes: [string, string][] = [];
@@ -199,5 +218,83 @@ describe("version 1 migration", () => {
           }),
       }).status,
     ).toBe("invalid");
+  });
+});
+
+describe("version 2 migration", () => {
+  function oldSave() {
+    const { purchases: _, ...state } = rollGame(
+      {
+        ...newGame(),
+        slots: 4,
+        inventory: { ...newGame().inventory, d4: 2, d6: 1 },
+      },
+      () => 0.99,
+    );
+    return { ...state, version: 2 };
+  }
+  it("keeps progress and roll history while inferring existing paid copies", () => {
+    const original = oldSave(),
+      raw = JSON.stringify(original);
+    const loaded = loadGame({ getItem: () => raw });
+    expect(loaded).toMatchObject({
+      status: "saved",
+      migratedFrom: 2,
+      legacyBackup: raw,
+      backupKey: "master-roller:save:v2-backup",
+    });
+    expect(loaded.state).toMatchObject({
+      ...original,
+      version: 3,
+      purchases: { d4: 1, d6: 1, d8: 0 },
+    });
+    expect(dieCost(loaded.state, "d4")).toBe(10);
+    expect(dieCost(loaded.state, "d6")).toBe(14);
+    expect(validSave(loaded.state)).toBe(true);
+    const writes: [string, string][] = [];
+    expect(
+      saveGame(
+        {
+          setItem: (key, value) => {
+            writes.push([key, value]);
+          },
+        },
+        loaded.state,
+        loaded.legacyBackup,
+        loaded.backupKey,
+      ),
+    ).toBe(true);
+    expect(writes.map(([key]) => key)).toEqual([
+      "master-roller:save:v2-backup",
+      "master-roller:save",
+    ]);
+    expect(writes[0][1]).toBe(raw);
+  });
+  it("does not overwrite a version-2 save when its backup fails", () => {
+    const raw = JSON.stringify(oldSave()),
+      loaded = loadGame({ getItem: () => raw });
+    const writes: string[] = [];
+    expect(
+      saveGame(
+        {
+          setItem: (key) => {
+            writes.push(key);
+            throw new Error("blocked");
+          },
+        },
+        loaded.state,
+        loaded.legacyBackup,
+        loaded.backupKey,
+      ),
+    ).toBe(false);
+    expect(writes).toEqual(["master-roller:save:v2-backup"]);
+  });
+  it("rejects corrupt old saves instead of migrating them", () => {
+    const original = oldSave();
+    const raw = JSON.stringify({
+      ...original,
+      lastRoll: { ...original.lastRoll, reward: 999 },
+    });
+    expect(loadGame({ getItem: () => raw }).status).toBe("invalid");
   });
 });

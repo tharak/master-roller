@@ -106,7 +106,7 @@ test("earned-money journey buys a slot and d6, reloads, and resets", async ({
       JSON.parse(localStorage.getItem("master-roller:save")!),
     ),
   ).toMatchObject({
-    version: 2,
+    version: 3,
     slots: 1,
     balance: 0,
     inventory: { d4: 1, d6: 0 },
@@ -162,7 +162,7 @@ test("simulated offers are free and respect purchased slots", async ({
   for (let count = 0; count < 7; count++)
     await page
       .getByRole("button", {
-        name: `Buy slot for ${(count + 1) * 3} Dicecoin`,
+        name: `Buy slot for ${3 * 2 ** count} Dicecoin`,
         exact: true,
       })
       .click();
@@ -194,7 +194,7 @@ test("simulated offers are free and respect purchased slots", async ({
   expect(shapes).not.toContain("triangular prism");
   await expect(dice).toHaveAttribute("aria-description", "8 dice");
   await page.reload();
-  await expect(page.getByLabel("9916 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("9619 Dicecoin", { exact: true })).toBeVisible();
   expect(
     await page.evaluate(
       () => JSON.parse(localStorage.getItem("master-roller:save")!).slots,
@@ -221,7 +221,7 @@ test("rapid slot taps cannot spend unavailable money", async ({ page }) => {
 test("slot prices increase with capacity and survive reload", async ({
   page,
 }) => {
-  await seed(page, { balance: 20 });
+  await seed(page, { balance: 23 });
   await page.goto("./");
   await section(page, "Dice shop");
   await page
@@ -234,17 +234,17 @@ test("slot prices increase with capacity and survive reload", async ({
   await page.reload();
   await section(page, "Dice shop");
   await page
-    .getByRole("button", { name: "Buy slot for 9 Dicecoin", exact: true })
+    .getByRole("button", { name: "Buy slot for 12 Dicecoin", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Buy slot for 12 Dicecoin", exact: true }),
+    page.getByRole("button", { name: "Buy slot for 24 Dicecoin", exact: true }),
   ).toBeDisabled();
   await expect(page.getByText("1 / 4 slots used")).toBeVisible();
   expect(
     await page.evaluate(() =>
       JSON.parse(localStorage.getItem("master-roller:save")!),
     ),
-  ).toMatchObject({ version: 2, slots: 4, balance: 2 });
+  ).toMatchObject({ version: 3, slots: 4, balance: 2 });
 });
 
 test("invalid save requires explicit recovery and remains untouched", async ({
@@ -265,7 +265,7 @@ test("invalid save requires explicit recovery and remains untouched", async ({
     await page.evaluate(() =>
       JSON.parse(localStorage.getItem("master-roller:save")!),
     ),
-  ).toMatchObject({ version: 2, slots: 1, level: 1, balance: 0 });
+  ).toMatchObject({ version: 3, slots: 1, level: 1, balance: 0 });
 });
 
 test("storage failure stays visible while play works", async ({ page }) => {
@@ -911,7 +911,7 @@ test("legacy migration backs up the save and preserves progress and capacity", a
   }));
   expect(result.backup).toEqual(legacy);
   expect(result.save).toMatchObject({
-    version: 2,
+    version: 3,
     level: 8,
     balance: 123,
     slots: 8,

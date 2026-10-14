@@ -280,7 +280,7 @@ export default function EconomyView() {
           ))}
           <label className="price-row slot-price">
             <span>
-              Slot base price<small>Next slot = base × owned slots</small>
+              Slot base price<small>Doubles with each extra slot</small>
             </span>
             <input
               aria-label="Draft slot price"
@@ -303,8 +303,9 @@ export default function EconomyView() {
             Reset draft prices
           </button>
           <p className="analysis-note">
-            Prices are Dicecoin. New games start with one d4, one slot, and zero
-            coins. Each roll earns its total, on wins and losses.
+            Prices are Dicecoin starting prices. Paid purchases double that
+            type’s next price; extra slots also double. New games start with one
+            free d4, one free slot, and zero coins. Each roll earns its total.
           </p>
         </aside>
         <div className="analysis-charts">
