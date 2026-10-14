@@ -30,7 +30,8 @@
 body {
   margin: 0;
   min-width: 280px;
-  background: radial-gradient(ellipse at 50% 25%, #252440 0, transparent 65%);
+  overflow: hidden;
+  background: #151925;
 }
 button,
 a,
@@ -77,22 +78,29 @@ p {
   border: 0;
 }
 .game-shell {
-  max-width: 540px;
-  min-height: 100svh;
-  margin: auto;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(170deg, #24253a, #151925 62%);
-  border-left: 1px solid #ffffff08;
-  border-right: 1px solid #ffffff08;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 50% 35%, #292940, #151925 75%);
 }
 .hud {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 50%;
+  translate: -50% 0;
+  width: 100%;
+  max-width: 640px;
   height: 76px;
-  flex-shrink: 0;
   padding: 16px 22px;
   display: flex;
   align-items: center;
   gap: 8px;
+  z-index: 10;
+  pointer-events: none;
+  background: linear-gradient(#1c2032ee, #1c203200);
 }
 .brand {
   font: 700 19px var(--display);
@@ -153,26 +161,30 @@ p {
   opacity: 0.4;
 }
 .game-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 8px 24px 0;
+  position: absolute;
+  inset: 0;
   min-width: 0;
 }
 .arena {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 480px;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  min-height: 0;
 }
 .level-target {
+  position: absolute;
+  top: calc(88px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  translate: -50% 0;
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 8px;
-  padding: 16px 0 8px;
+  padding: 9px 14px;
+  border-radius: 20px;
+  background: #181d30bb;
+  backdrop-filter: blur(8px);
   color: #acafc7;
+  z-index: 5;
 }
 .level-label {
   font: 600 11px var(--display);
@@ -186,45 +198,43 @@ p {
   overflow-wrap: anywhere;
 }
 .dice-field {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  position: relative;
-  padding: 24px 8px 16px;
-  min-height: 220px;
+  position: absolute;
+  inset: 0;
   isolation: isolate;
 }
 .dice-field:before {
   content: "";
-  z-index: -1;
   position: absolute;
-  inset: 8% 2%;
-  background: radial-gradient(ellipse, #79739e18, transparent 70%);
-  border-radius: 50%;
-  border: 1px solid #a9a2ff0b;
-  box-shadow:
-    0 0 0 30px #a9a2ff03,
-    0 0 0 60px #a9a2ff02;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(ellipse at center, #77749c12, transparent 70%),
+    radial-gradient(#a9a2ff0c 1px, transparent 1px);
+  background-size:
+    auto,
+    28px 28px;
   pointer-events: none;
 }
 .dice-grid {
-  display: flex;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--dice-columns, 1), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--dice-rows, 1), minmax(0, 1fr));
   align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 14px;
-  padding: 20px 0 30px;
-  max-height: 330px;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #77708e44 transparent;
+  justify-items: center;
+  gap: 12px;
+  padding: calc(132px + env(safe-area-inset-top, 0px))
+    max(24px, env(safe-area-inset-right, 0px))
+    calc(110px + env(safe-area-inset-bottom, 0px))
+    max(24px, env(safe-area-inset-left, 0px));
+  overflow: hidden;
 }
 .play-die {
   --die-color: #dbff78;
   position: relative;
-  width: 82px;
-  height: 90px;
+  width: var(--die-size, 82px);
+  height: calc(var(--die-size, 82px) * 1.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -267,7 +277,7 @@ p {
   top: 24%;
   left: 50%;
   translate: -50% 0;
-  font: 500 10px var(--display);
+  font: 500 clamp(7px, calc(var(--die-size, 82px) * 0.12), 10px) var(--display);
   opacity: 0.75;
   z-index: 1;
 }
@@ -276,7 +286,7 @@ p {
   left: 50%;
   top: 55%;
   translate: -50% -50%;
-  font: 600 34px var(--display);
+  font: 600 min(34px, calc(var(--die-size, 82px) * 0.41)) var(--display);
   line-height: 1;
   z-index: 1;
   text-shadow: 0 2px 3px #111622;
@@ -285,7 +295,7 @@ p {
 .die-d6 .die-value {
   left: 35%;
   top: 59%;
-  font-size: 31px;
+  font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
 .die-d3 .die-type,
 .die-d6 .die-type {
@@ -295,7 +305,7 @@ p {
 .die-d4 .die-value {
   left: 43%;
   top: 67%;
-  font-size: 31px;
+  font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
 .die-d4 .die-type {
   left: 43%;
@@ -304,7 +314,7 @@ p {
 .die-d8 .die-value {
   left: 44%;
   top: 46%;
-  font-size: 31px;
+  font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
 .die-d8 .die-type {
   left: 44%;
@@ -312,28 +322,28 @@ p {
 }
 .die-d10 .die-value {
   top: 54%;
-  font-size: 31px;
+  font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
 .die-d10 .die-type {
   top: 30%;
 }
 .die-d12 .die-value {
   top: 52%;
-  font-size: 31px;
+  font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
 .die-d12 .die-type {
   top: 30%;
 }
 .die-d20 .die-value {
   top: 56%;
-  font-size: 31px;
+  font-size: min(31px, calc(var(--die-size, 82px) * 0.38));
 }
 .die-d20 .die-type {
   top: 34%;
 }
 .die-d100 .die-value {
   top: 53%;
-  font-size: 30px;
+  font-size: min(30px, calc(var(--die-size, 82px) * 0.37));
 }
 .die-d100 .die-type {
   top: 25%;
@@ -345,15 +355,13 @@ p {
   transform: rotate(-2deg) translateY(5px);
 }
 .single-die .play-die {
-  width: 126px;
-  height: 134px;
   transform: rotate(-9deg);
 }
 .single-die .die-type {
   font-size: 14px;
 }
 .single-die .die-value {
-  font-size: 52px;
+  font-size: min(52px, calc(var(--die-size, 126px) * 0.42));
 }
 .lime {
   --die-color: #dbff78;
@@ -383,12 +391,16 @@ p {
   --die-color: #efad77;
 }
 .controls {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  padding: 6px 0;
+  position: absolute;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  translate: -50% 0;
+  width: calc(100% - 32px);
+  max-width: 480px;
+  z-index: 10;
 }
 .roll-button {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -422,11 +434,14 @@ p {
   opacity: 0.65;
 }
 .save-status {
-  min-height: 22px;
+  position: absolute;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  translate: -50% 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 10;
 }
 .saved-dot,
 .unsaved-dot {
@@ -741,38 +756,6 @@ p {
     opacity: 1;
   }
 }
-@media (min-width: 700px) {
-  body {
-    padding: 32px 0;
-    background-image:
-      radial-gradient(ellipse at 50% 30%, #34304e55, transparent 65%),
-      radial-gradient(#aaa0d812 1px, transparent 1px);
-    background-size:
-      auto,
-      24px 24px;
-  }
-  .game-shell {
-    min-height: 740px;
-    border: 1px solid #4a465d;
-    border-radius: 30px;
-    box-shadow: 0 30px 100px #0006;
-  }
-  .game-main {
-    padding: 8px 32px 12px;
-  }
-  .arena {
-    min-height: 540px;
-  }
-  .level-target {
-    padding-top: 20px;
-  }
-  .dice-field {
-    min-height: 280px;
-  }
-  .modal {
-    border-radius: 22px;
-  }
-}
 @media (max-width: 360px) {
   .hud {
     padding: 12px 14px;
@@ -789,22 +772,6 @@ p {
   .icon-button {
     width: 44px;
     height: 44px;
-  }
-  .game-main {
-    padding: 0 16px;
-  }
-  .arena {
-    min-height: 420px;
-  }
-  .level-target {
-    padding-top: 12px;
-  }
-  .play-die {
-    width: 67px;
-    height: 75px;
-  }
-  .dice-grid {
-    gap: 12px;
   }
   .modal {
     padding: 22px 16px;
@@ -846,31 +813,8 @@ p {
     padding-top: 10px;
     padding-bottom: 10px;
   }
-  .game-main {
-    padding-top: 0;
-  }
-  .arena {
-    min-height: 380px;
-  }
-  .level-target {
-    padding-top: 6px;
-  }
-  .dice-field {
-    min-height: 170px;
-    padding-top: 10px;
-  }
-  .dice-grid {
-    max-height: 205px;
-  }
   .roll-button {
     min-height: 62px;
-  }
-  .single-die .play-die {
-    width: 104px;
-    height: 112px;
-  }
-  .single-die .die-value {
-    font-size: 44px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -948,7 +892,7 @@ p {
 
 .reward-flight {
   position: fixed;
-  z-index: 10;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1025,18 +969,6 @@ p {
   }
 }
 
-.sum-burst {
-  transition:
-    top 0.25s ease-out,
-    scale 0.25s ease-out;
-}
-.sum-settled {
-  top: calc(100% - 70px);
-  scale: 0.65;
-}
-.dice-field.has-total .dice-grid {
-  translate: 0 -60px;
-}
 .earned-reward {
   position: absolute;
   left: 50%;
@@ -1111,4 +1043,27 @@ p {
 }
 .shop-die-type.die-d4 > strong {
   translate: -4px 7px;
+}
+
+.hud > * {
+  pointer-events: auto;
+}
+
+.warning {
+  position: absolute;
+  top: calc(128px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  translate: -50% 0;
+  width: calc(100% - 32px);
+  max-width: 480px;
+  z-index: 12;
+}
+@media (max-height: 700px) {
+  .level-target {
+    top: calc(76px + env(safe-area-inset-top, 0px));
+  }
+  .dice-grid {
+    padding-top: calc(116px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  }
 }

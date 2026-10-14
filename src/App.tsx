@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   buyDie,
   DICE,
@@ -56,13 +62,32 @@ export default function App() {
   const gameRef = useRef(game);
   gameRef.current = game;
   const diceField = useRef<HTMLElement>(null);
+  const diceGrid = useRef<HTMLDivElement>(null);
   const sumAnchor = useRef<HTMLDivElement>(null);
   const wallet = useRef<HTMLButtonElement>(null);
   const reward = useRef<HTMLSpanElement>(null);
   const coinFlight = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const [poolSize, setPoolSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
   const stats = poolStats(game);
+
+  useLayoutEffect(() => {
+    if (!diceGrid.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setPoolSize((previous) =>
+        previous.width === width && previous.height === height
+          ? previous
+          : { width, height },
+      );
+    });
+    observer.observe(diceGrid.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (saveStatus === "invalid") return;
@@ -241,7 +266,7 @@ export default function App() {
       : game.level;
   const showSum =
     Boolean(last) &&
-    ["idle", "total", "reward", "crediting", "collected"].includes(phase);
+    ["total", "reward", "crediting", "collected"].includes(phase);
 
   const visibleDice = DICE.flatMap((die) => {
     const values =
@@ -255,6 +280,25 @@ export default function App() {
       }),
     );
   });
+  // Use the grid's content box so dice stay clear of the overlaid controls.
+  let columns = 1;
+  let availableSize = 0;
+  for (let count = 1; count <= visibleDice.length; count++) {
+    const rowCount = Math.ceil(visibleDice.length / count);
+    const size = Math.min(
+      (poolSize.width - (count - 1) * 12) / count,
+      (poolSize.height - (rowCount - 1) * 12) / rowCount / 1.1,
+    );
+    if (size > availableSize) {
+      columns = count;
+      availableSize = size;
+    }
+  }
+  const rows = Math.ceil(visibleDice.length / columns);
+  const dieSize = Math.max(
+    1,
+    Math.min(visibleDice.length === 1 ? 126 : 82, availableSize * 0.85),
+  );
 
   return (
     <div className="game-shell">
@@ -309,12 +353,20 @@ export default function App() {
           </div>
           <section
             ref={diceField}
-            className={`dice-field ${last && phase === "idle" ? "has-total" : ""}`}
+            className="dice-field"
             aria-label="Your collection"
             aria-description={`${stats.count} ${stats.count === 1 ? "die" : "dice"}`}
           >
             <div
+              ref={diceGrid}
               className={`dice-grid ${visibleDice.length === 1 ? "single-die" : ""}`}
+              style={
+                {
+                  "--dice-columns": columns,
+                  "--dice-rows": rows,
+                  "--die-size": `${dieSize}px`,
+                } as CSSProperties
+              }
             >
               {visibleDice.map(({ die, index, value }) => (
                 <div
@@ -336,11 +388,11 @@ export default function App() {
             </div>
             <div
               ref={sumAnchor}
-              className={`sum-burst ${showSum ? "sum-visible" : ""} ${last && phase === "idle" ? "sum-settled" : ""}`}
+              className={`sum-burst ${showSum ? "sum-visible" : ""}`}
               aria-hidden="true"
             >
               <strong data-testid="roll-total">
-                {last ? number(last.total) : ""}
+                {last && showSum ? number(last.total) : ""}
               </strong>
             </div>
             {last && (
@@ -353,7 +405,7 @@ export default function App() {
             )}
           </section>
           <span className="sr-only" role="status" aria-live="polite">
-            {last && showSum
+            {last
               ? `Total ${last.total}. ${last.won ? "Level cleared." : "Try again."} Earned ${last.reward} Dicecoin.`
               : ""}
           </span>

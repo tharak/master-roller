@@ -42,9 +42,15 @@ test("starting journey, purchases, reload, and confirmed reset", async ({
     .click();
   await expect(page.getByTestId("target")).toHaveText("3");
   await expect(page.getByLabel("30 Dicecoin", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Roll arena" }),
+  ).toHaveAttribute("data-phase", "idle");
+  await expect(page.getByTestId("roll-total")).toBeEmpty();
   await page.reload();
   await expect(page.getByTestId("target")).toHaveText("3");
   await expect(page.getByLabel("30 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("roll-total")).toBeEmpty();
+  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
   await expect(
     page
       .getByRole("region", { name: "Your collection" })
@@ -197,6 +203,10 @@ test("fits narrow screens, keyboard controls work, and reduced motion resolves r
   await roll.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("target")).toHaveText("2");
+  await expect(page.getByTestId("roll-total")).toBeEmpty();
+  await expect(page.locator(".arena [role=status]")).toContainText(
+    "Total 1. Level cleared. Earned 20 Dicecoin.",
+  );
   await section(page, "Dice shop");
   expect(
     await page.evaluate(
@@ -254,8 +264,117 @@ test("dice are on the main screen and show each rolled face", async ({
   await expect(
     page.getByRole("region", { name: "Roll arena" }),
   ).toHaveAttribute("data-phase", "idle");
-  await expect(page.getByTestId("roll-total")).toBeVisible();
-  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "1");
+  await expect(page.getByTestId("roll-total")).toBeEmpty();
+  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
+});
+
+test("pool fills the viewport, resizes dense dice, and keeps overlays usable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "master-roller:save",
+      JSON.stringify({
+        version: 1,
+        level: 1,
+        balance: 100,
+        lastRoll: null,
+        inventory: {
+          d2: 6,
+          d3: 6,
+          d4: 6,
+          d6: 6,
+          d8: 6,
+          d10: 6,
+          d12: 6,
+          d20: 6,
+          d100: 6,
+        },
+      }),
+    );
+  });
+  await page.goto("./");
+  await expect(page.locator(".play-die")).toHaveCount(54);
+  // Wait for entry animations before measuring the settled dice.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+    { width: 844, height: 390 },
+    { width: 320, height: 568 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect
+      .poll(async () =>
+        page.getByRole("region", { name: "Your collection" }).boundingBox(),
+      )
+      .toEqual({ x: 0, y: 0, ...viewport });
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const bounds = Array.from(
+            document.querySelectorAll(".play-die"),
+            (die) => die.getBoundingClientRect(),
+          );
+          const level = document
+            .querySelector(".level-target")!
+            .getBoundingClientRect();
+          const controls = document
+            .querySelector(".controls")!
+            .getBoundingClientRect();
+          const shell = document
+            .querySelector(".game-shell")!
+            .getBoundingClientRect();
+          return bounds.every(
+            (die) =>
+              die.left >= shell.left &&
+              die.right <= shell.right &&
+              die.top >= level.bottom &&
+              die.bottom <= controls.top,
+          );
+        }),
+      )
+      .toBe(true);
+    const spread = await page.locator(".play-die").evaluateAll((dice) => {
+      const bounds = dice.map((die) => die.getBoundingClientRect());
+      return {
+        width:
+          Math.max(...bounds.map((die) => die.right)) -
+          Math.min(...bounds.map((die) => die.left)),
+        height:
+          Math.max(...bounds.map((die) => die.bottom)) -
+          Math.min(...bounds.map((die) => die.top)),
+      };
+    });
+    expect(spread.width).toBeGreaterThan(viewport.width * 0.6);
+    expect(spread.height).toBeGreaterThan((viewport.height - 242) * 0.6);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollHeight <= innerHeight &&
+          document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    const rollBounds = await page.locator(".roll-button").boundingBox();
+    expect(rollBounds!.width).toBeCloseTo(Math.min(480, viewport.width - 32));
+    await section(page, "Dice shop");
+    await expect(page.getByRole("dialog", { name: "Dice shop" })).toBeVisible();
+    await section(page, "Play");
+    await page.getByRole("button", { name: "How to play" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "How to play" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page
+      .getByRole("button", { name: "Reset progress", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Keep playing" }).click();
+  }
+  await page
+    .getByRole("button", { name: "Roll your dice", exact: true })
+    .click();
+  await expect(page.getByLabel("120 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("roll-total")).toBeEmpty();
 });
 
 test("large collections still roll every die and expose all die types", async ({
@@ -375,6 +494,11 @@ for (const scenario of [
     await expect(page.getByTestId("reward-flight")).toHaveCount(0);
     await page.clock.fastForward(220);
     await expect(arena).toHaveAttribute("data-phase", "idle");
+    await expect(page.getByTestId("roll-total")).toBeEmpty();
+    await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
+    await expect(
+      page.getByLabel(`d2 rolled ${scenario.total}`, { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Roll your die", exact: true }),
     ).toBeEnabled();
@@ -410,6 +534,8 @@ test("refresh during the reward flight preserves exactly one reward", async ({
   ).toBeVisible();
   await expect(page.getByTestId("target")).toHaveText("2");
   await expect(arena).toHaveAttribute("data-phase", "idle");
+  await expect(page.getByTestId("roll-total")).toBeEmpty();
+  await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "0");
   await page.clock.fastForward(10000);
   await expect(
     page.getByRole("button", { name: "20 Dicecoin", exact: true }),
