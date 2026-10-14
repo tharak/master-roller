@@ -6,6 +6,7 @@ import {
   newGame,
   poolStats,
   rollGame,
+  slotCost,
 } from "../src/game";
 import { analyzeEconomy, defaultPrices, seededRandom } from "../src/economy";
 
@@ -26,7 +27,7 @@ function simulate(seed: number, strategy: Strategy) {
         ? DICE[0]
         : (DICE.find((die) => game.inventory[die.id] === 0) ?? DICE.at(-1)!);
     const slotNeeded = poolStats(game).count >= game.slots;
-    if (game.balance >= next.price + (slotNeeded ? ECONOMY.slotPrice : 0)) {
+    if (game.balance >= next.price + (slotNeeded ? slotCost(game.slots) : 0)) {
       if (slotNeeded) {
         game = buySlot(game);
         slotsBought++;
@@ -40,7 +41,7 @@ function simulate(seed: number, strategy: Strategy) {
   return { rolls, losses, purchases, slotsBought, dice: poolStats(game).count };
 }
 console.log(
-  "Progression through level 100. Roll-total earnings, fixed live prices, 50-coin slots; no test purchases. 100 seeds per strategy.",
+  `Progression through level 100. Roll-total earnings, live dice prices, slots cost ${ECONOMY.slotPrice} × owned slots; no test purchases. 100 seeds per strategy.`,
 );
 for (const strategy of ["d4-only", "next-die"] as const) {
   const runs = Array.from({ length: 100 }, (_, index) =>

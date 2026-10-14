@@ -1,9 +1,11 @@
 import {
   DICE,
   ECONOMY,
+  LEGACY_DRAFT_DEFAULTS,
   newGame,
   poolStats,
   rollGame,
+  slotCost,
   type DieId,
   type GameState,
 } from "./game";
@@ -30,6 +32,133 @@ export function validPrices(value: unknown): value is DraftPrices {
     valid(draft.slot) &&
     DICE.every((die) => valid(draft.dice[die.id])),
   );
+}
+export const DRAFT_KEY = "master-roller:economy-draft:v2";
+export const LEGACY_DRAFT_KEY = "master-roller:economy-draft:v1";
+export function loadDraftPrices(
+  storage: Pick<Storage, "getItem">,
+): DraftPrices {
+  try {
+    const current = storage.getItem(DRAFT_KEY);
+    if (current !== null) {
+      const parsed: unknown = JSON.parse(current);
+      return validPrices(parsed) ? parsed : defaultPrices();
+    }
+    const legacy: unknown = JSON.parse(
+      storage.getItem(LEGACY_DRAFT_KEY) ?? "null",
+    );
+    if (!validPrices(legacy)) return defaultPrices();
+    const untouched =
+      legacy.slot === LEGACY_DRAFT_DEFAULTS.slot &&
+      DICE.every(
+        (die) => legacy.dice[die.id] === LEGACY_DRAFT_DEFAULTS.dice[die.id],
+      );
+    return untouched ? defaultPrices() : legacy;
+  } catch {
+    return defaultPrices();
+  }
+}
+
+export function poolLabel(ids: readonly DieId[]): string {
+  return DICE.flatMap((die) => {
+    const count = ids.filter((id) => id === die.id).length;
+    return count ? [`${count}${die.id}`] : [];
+  }).join(" + ");
+}
+export function comparePool(ids: readonly DieId[], prices: DraftPrices) {
+  return ids.reduce(
+    (stats, id) => {
+      const die = DICE.find((d) => d.id === id)!;
+      return {
+        slots: stats.slots + 1,
+        min: stats.min + die.min,
+        max: stats.max + die.max,
+        mean: stats.mean + (die.min + die.max) / 2,
+        diceCost: stats.diceCost + prices.dice[id],
+      };
+    },
+    { slots: 0, min: 0, max: 0, mean: 0, diceCost: 0 },
+  );
+}
+export function minimumWinningIncome(
+  ids: readonly DieId[],
+  from: number,
+  through: number,
+): number {
+  const stats = comparePool(ids, defaultPrices());
+  if (
+    !Number.isInteger(from) ||
+    !Number.isInteger(through) ||
+    from < 1 ||
+    through < from ||
+    through > stats.max
+  )
+    throw new RangeError(
+      "The pool must be able to clear the requested levels.",
+    );
+  let income = 0;
+  for (let level = from; level <= through; level++)
+    income += Math.max(level, stats.min);
+  return income;
+}
+export interface BudgetChoice {
+  pool: DieId[];
+  through: number;
+  wallet: number | null;
+  addition: DieId[];
+  cost: number;
+  result: DieId[];
+  affordable: boolean | null;
+}
+export function earlyUpgradeChoices(prices: DraftPrices): BudgetChoice[] {
+  const starter: DieId[] = ["d4"],
+    second: DieId[] = ["d4", "d6"];
+  const firstWallet = minimumWinningIncome(starter, 1, 4);
+  const firstUpgrade = prices.dice.d6 + slotCost(1, prices.slot);
+  const secondWallet =
+    firstUpgrade <= firstWallet
+      ? firstWallet - firstUpgrade + minimumWinningIncome(second, 5, 10)
+      : null;
+  return [
+    {
+      pool: starter,
+      through: 4,
+      wallet: firstWallet,
+      addition: ["d4"] as DieId[],
+    },
+    {
+      pool: starter,
+      through: 4,
+      wallet: firstWallet,
+      addition: ["d6"] as DieId[],
+    },
+    {
+      pool: second,
+      through: 10,
+      wallet: secondWallet,
+      addition: ["d8"] as DieId[],
+    },
+    {
+      pool: second,
+      through: 10,
+      wallet: secondWallet,
+      addition: ["d4", "d4"] as DieId[],
+    },
+  ].map((choice) => {
+    const cost =
+      comparePool(choice.addition, prices).diceCost +
+      choice.addition.reduce(
+        (total, _, index) =>
+          total + slotCost(choice.pool.length + index, prices.slot),
+        0,
+      );
+    return {
+      ...choice,
+      cost,
+      result: [...choice.pool, ...choice.addition],
+      affordable: choice.wallet === null ? null : cost <= choice.wallet,
+    };
+  });
 }
 export function seededRandom(seed: number) {
   return () => {
@@ -86,7 +215,7 @@ export function upgradeRun(
     // Reserve enough for both the next die and its slot. All existing dice keep rolling.
     while (stage < DICE.length - 1) {
       const next = DICE[stage + 1];
-      const cost = prices.dice[next.id] + prices.slot;
+      const cost = prices.dice[next.id] + slotCost(game.slots, prices.slot);
       if (game.balance < cost) break;
       spent += cost;
       game = {
@@ -150,7 +279,7 @@ export function analyzeEconomy(
   );
   let cumulativeCost = 0;
   const upgrades = DICE.slice(1).map((die, index) => {
-    const cost = prices.dice[die.id] + prices.slot;
+    const cost = prices.dice[die.id] + slotCost(index + 1, prices.slot);
     cumulativeCost += cost;
     const events = runs.flatMap((run) =>
       run.events[index] ? [run.events[index]] : [],

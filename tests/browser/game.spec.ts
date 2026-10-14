@@ -45,21 +45,29 @@ test("earned-money journey buys a slot and d6, reloads, and resets", async ({
   await section(page, "Dice shop");
   await expect(page.getByText("1 / 1 slots used")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Buy d6 for 70 Dicecoin", exact: true }),
+    page.getByRole("button", { name: "Buy d6 for 7 Dicecoin", exact: true }),
   ).toBeDisabled();
   await expect(page.getByRole("button", { name: /Buy d[23] / })).toHaveCount(0);
   await section(page, "Play");
-  for (let count = 0; count < 30; count++) await rollButton(page).click();
+  for (let count = 0; count < 4; count++) {
+    await page.evaluate((value) => {
+      Math.random = () => value;
+    }, count / 4);
+    await rollButton(page).click();
+  }
+  await page.evaluate(() => {
+    Math.random = () => 0.99;
+  });
   await expect(page.getByTestId("target")).toHaveText("5");
-  await expect(page.getByLabel("120 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("10 Dicecoin", { exact: true })).toBeVisible();
   await section(page, "Dice shop");
   const buyDie = page.getByRole("button", {
-    name: "Buy d6 for 70 Dicecoin",
+    name: "Buy d6 for 7 Dicecoin",
     exact: true,
   });
   await expect(buyDie).toBeDisabled(); // Money alone does not bypass capacity.
   await page
-    .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
+    .getByRole("button", { name: "Buy slot for 3 Dicecoin", exact: true })
     .click();
   await expect(page.getByText("1 / 2 slots used")).toBeVisible();
   await buyDie.click();
@@ -148,7 +156,10 @@ test("simulated offers are free and respect purchased slots", async ({
   await page.getByRole("button", { name: "Back to dice shop" }).click();
   for (let count = 0; count < 7; count++)
     await page
-      .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
+      .getByRole("button", {
+        name: `Buy slot for ${(count + 1) * 3} Dicecoin`,
+        exact: true,
+      })
       .click();
   await page
     .getByRole("button", { name: "Test purchases", exact: true })
@@ -178,7 +189,7 @@ test("simulated offers are free and respect purchased slots", async ({
   expect(shapes).not.toContain("triangular prism");
   await expect(dice).toHaveAttribute("aria-description", "8 dice");
   await page.reload();
-  await expect(page.getByLabel("9650 Dicecoin", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("9916 Dicecoin", { exact: true })).toBeVisible();
   expect(
     await page.evaluate(
       () => JSON.parse(localStorage.getItem("master-roller:save")!).slots,
@@ -187,11 +198,11 @@ test("simulated offers are free and respect purchased slots", async ({
 });
 
 test("rapid slot taps cannot spend unavailable money", async ({ page }) => {
-  await seed(page, { balance: 50 });
+  await seed(page, { balance: 3 });
   await page.goto("./");
   await section(page, "Dice shop");
   await page
-    .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
+    .getByRole("button", { name: "Buy slot for 3 Dicecoin", exact: true })
     .evaluate((element) => {
       const button = element as HTMLButtonElement;
       button.click();
@@ -200,6 +211,35 @@ test("rapid slot taps cannot spend unavailable money", async ({ page }) => {
     });
   await expect(page.getByText("1 / 2 slots used")).toBeVisible();
   await expect(page.getByLabel("0 Dicecoin", { exact: true })).toBeVisible();
+});
+
+test("slot prices increase with capacity and survive reload", async ({
+  page,
+}) => {
+  await seed(page, { balance: 20 });
+  await page.goto("./");
+  await section(page, "Dice shop");
+  await page
+    .getByRole("button", { name: "Buy slot for 3 Dicecoin", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Buy slot for 6 Dicecoin", exact: true })
+    .click();
+  await expect(page.getByText("1 / 3 slots used")).toBeVisible();
+  await page.reload();
+  await section(page, "Dice shop");
+  await page
+    .getByRole("button", { name: "Buy slot for 9 Dicecoin", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Buy slot for 12 Dicecoin", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText("1 / 4 slots used")).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("master-roller:save")!),
+    ),
+  ).toMatchObject({ version: 2, slots: 4, balance: 2 });
 });
 
 test("invalid save requires explicit recovery and remains untouched", async ({
@@ -274,7 +314,7 @@ test("narrow screens, keyboard controls and reduced motion work", async ({
 test("dice have shapes and numeric faces without type labels", async ({
   page,
 }) => {
-  await seed(page, { balance: 120 });
+  await seed(page, { balance: 10 });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => {
     Math.random = () => 0.99;
@@ -296,10 +336,10 @@ test("dice have shapes and numeric faces without type labels", async ({
   await expect(dice.getByLabel("d4 rolled 4", { exact: true })).toBeVisible();
   await section(page, "Dice shop");
   await page
-    .getByRole("button", { name: "Buy slot for 50 Dicecoin", exact: true })
+    .getByRole("button", { name: "Buy slot for 3 Dicecoin", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Buy d6 for 70 Dicecoin", exact: true })
+    .getByRole("button", { name: "Buy d6 for 7 Dicecoin", exact: true })
     .click();
   await section(page, "Play");
   await expect(

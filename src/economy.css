@@ -290,6 +290,56 @@
 .wait-value {
   color: #efad77;
 }
+.value-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 650px;
+  margin-top: 20px;
+  text-align: left;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.value-table caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.value-table td,
+.value-table th {
+  padding: 13px 10px;
+  border-bottom: 1px solid #ffffff10;
+}
+.value-table thead {
+  color: #9a9daf;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.value-table tbody th {
+  white-space: nowrap;
+  font: 600 12px var(--display);
+}
+.value-table small {
+  display: block;
+  color: #9a9daf;
+  margin-top: 4px;
+}
+.pool-emphasis {
+  background: #91bbff0b;
+}
+.budget-table {
+  min-width: 900px;
+}
+.budget-fits {
+  color: #dbff78;
+}
+.budget-short {
+  color: #efad77;
+}
+.budget-badge {
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 200px;
+}
 @media (max-width: 800px) {
   .analysis-layout {
     display: flex;
