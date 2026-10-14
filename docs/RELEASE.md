@@ -39,3 +39,9 @@ These are reproducible baselines, not a claim of optimal play or final balance. 
 ## Test release boundaries
 
 All nine dice are text labels. All test-purchase offers are free simulations. Saves are browser-local. There are no native store integrations, real-money transactions, accounts or backend. Mobile checks use Chromium emulation rather than physical iOS/Android devices.
+
+## Game board update — #9
+
+Replaced the text-heavy page with a single game board: owned dice and rolled faces in the center, the target above, and Roll plus a compact shop button below. Rules and roll details are available on demand. The shop is a compact three-column dialog. Existing rules, prices, and saves are preserved.
+
+Validation now includes 16 desktop/mobile browser checks, including on-screen die faces, newly bought dice joining the board, the Roll button fitting a 390 × 844 viewport, and all 51 dice contributing to a large-pool roll. The original 44 unit tests and 200 progression simulations still pass.
