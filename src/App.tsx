@@ -14,6 +14,7 @@ import {
   poolStats,
   rollGame,
   simulatePurchase,
+  slotCost,
   type DieId,
   type TestOffer,
 } from "./game";
@@ -668,11 +669,11 @@ export default function App() {
               </div>
               <button
                 className="buy-button"
-                aria-label={`Buy slot for ${ECONOMY.slotPrice} Dicecoin`}
-                disabled={rolling || game.balance < ECONOMY.slotPrice}
+                aria-label={`Buy slot for ${slotCost(game.slots)} Dicecoin`}
+                disabled={rolling || game.balance < slotCost(game.slots)}
                 onClick={purchaseSlot}
               >
-                + Slot <Coin amount={ECONOMY.slotPrice} />
+                + Slot <Coin amount={slotCost(game.slots)} />
               </button>
             </div>
             <div className="shop-grid">
@@ -780,9 +781,11 @@ export default function App() {
               Earn your rolled total in <Coin /> Dicecoin, on wins and losses.
             </p>
             <p className="modal-copy">
-              Start with one d4 in one slot. Extra slots cost{" "}
-              {ECONOMY.slotPrice} Dicecoin each. Each owned die uses one slot
-              and joins every roll.
+              Start with one d4 in one free slot. Extra slots cost{" "}
+              {ECONOMY.slotPrice}, {ECONOMY.slotPrice * 2},{" "}
+              {ECONOMY.slotPrice * 3} Dicecoin and so on, increasing by{" "}
+              {ECONOMY.slotPrice} each time. Each owned die uses one slot and
+              joins every roll.
             </p>
             <p className="modal-copy">
               Dice roll 1 through their face count. Buy an empty slot before

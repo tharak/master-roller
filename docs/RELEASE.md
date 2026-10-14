@@ -1,8 +1,18 @@
 # Mobile Web Test Release — v0.1.0
 
+## Value pricing and increasing slot costs — #25
+
+Live dice prices are 5/7/9/11/13/21/101, twice each die’s average. Extra slots cost 3 × slots already owned: 3, 6, 9, 12… Dicecoin. The starter die and slot are free. Existing saves retain their balance, collection and capacity; the next slot price follows saved capacity without a schema change.
+
+The Economy lab now shows whole-pool comparisons and guaranteed checkpoint wallets after previous spending. A d6 plus the first extra slot costs 10, fully covered by clearing levels 1–4. At level 10 after that purchase, the minimum wallet is 45: adding a d8 and a slot costs 15, or two d4s and two slots cost 25. Draft edits recalculate tables and simulations, including increasing slot prices. Untouched old defaults update; custom draft values remain, with the slot value used as the scaling base.
+
+The 200-seed upgrade analysis buys d6 on median roll 5 (middle 80%: 4–6) and d100 on roll 17 (16–19), spending 225 cumulatively. Progression through level 100 averages 102.8 rolls / 2.8 losses for d4-only buying and 102.7 rolls / 2.7 losses for next-die buying. These are strategy baselines rather than optimal-play claims.
+
+Validation: full gate passes with 52 unit checks, 52 desktop/mobile browser checks, type checking, production build, 200 progression runs through level 100 and 200 upgrade-analysis runs. Visual review covers 1440px desktop and 390px phone layouts; the 320px browser check confirms no page overflow. Tests cover minimum winning income funding the first d6, successive slot prices and reload, table recalculation, unavailable later budgets, draft compatibility and game-save isolation.
+
 ## Economy and analysis update — #21
 
-Current rules supersede the historical baselines below: start with one d4 and one slot; supported dice are d4/d6/d8/d10/d12/d20/d100; extra slots cost a flat 50 Dicecoin; each roll earns its total, on wins and losses. Die prices remain 50/70/90/110/130/210/1010 while the economy lab offers separate editable drafts.
+Rules at the #21 release (prices superseded by #25 above): start with one d4 and one slot; supported dice are d4/d6/d8/d10/d12/d20/d100; extra slots cost a flat 50 Dicecoin; each roll earns its total, on wins and losses. Die prices remain 50/70/90/110/130/210/1010 while the economy lab offers separate editable drafts.
 
 The lab graphs all possible faces, exact pool probabilities, and seeded upgrade affordability including slots. At default prices, the first d6 plus slot costs 120, with median purchase roll 49 and 41 median rolls at an unreachable level. Cumulative cost through d100 is 1,920, purchased on median roll 144. Simulation assumptions and capped-run counts are shown in the view.
 

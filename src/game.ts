@@ -3,16 +3,16 @@ export const DICE = [
     id: "d4",
     min: 1,
     max: 4,
-    price: 50,
+    price: 5,
     name: "Small but mighty",
     color: "blue",
   },
-  { id: "d6", min: 1, max: 6, price: 70, name: "The classic", color: "lilac" },
+  { id: "d6", min: 1, max: 6, price: 7, name: "The classic", color: "lilac" },
   {
     id: "d8",
     min: 1,
     max: 8,
-    price: 90,
+    price: 9,
     name: "Raise the stakes",
     color: "pink",
   },
@@ -20,7 +20,7 @@ export const DICE = [
     id: "d10",
     min: 1,
     max: 10,
-    price: 110,
+    price: 11,
     name: "Double digits",
     color: "peach",
   },
@@ -28,7 +28,7 @@ export const DICE = [
     id: "d12",
     min: 1,
     max: 12,
-    price: 130,
+    price: 13,
     name: "A dozen reasons",
     color: "yellow",
   },
@@ -36,7 +36,7 @@ export const DICE = [
     id: "d20",
     min: 1,
     max: 20,
-    price: 210,
+    price: 21,
     name: "Feeling heroic",
     color: "cyan",
   },
@@ -44,13 +44,25 @@ export const DICE = [
     id: "d100",
     min: 1,
     max: 100,
-    price: 1010,
+    price: 101,
     name: "Go big",
     color: "orange",
   },
 ] as const;
 export type DieId = (typeof DICE)[number]["id"];
-export const ECONOMY = { slotPrice: 50, coinPack: 10_000 } as const;
+export const ECONOMY = { slotPrice: 3, coinPack: 10_000 } as const;
+// The starting slot is free; extra slots cost 1×, 2×, 3×… the base price.
+export function slotCost(
+  ownedSlots: number,
+  basePrice: number = ECONOMY.slotPrice,
+) {
+  return ownedSlots * basePrice;
+}
+// Compatibility baseline for untouched drafts saved before the pricing update.
+export const LEGACY_DRAFT_DEFAULTS = {
+  dice: { d4: 50, d6: 70, d8: 90, d10: 110, d12: 130, d20: 210, d100: 1010 },
+  slot: 50,
+} as const;
 export const LEGACY_DICE = [
   { id: "d2", min: 0, max: 1 },
   { id: "d3", min: 1, max: 3 },
@@ -127,14 +139,16 @@ export function buyDie(state: GameState, id: DieId): GameState {
   };
 }
 export function buySlot(state: GameState): GameState {
+  const cost = slotCost(state.slots);
   if (
-    state.balance < ECONOMY.slotPrice ||
+    !Number.isSafeInteger(cost) ||
+    state.balance < cost ||
     !Number.isSafeInteger(state.slots + 1)
   )
     return state;
   return {
     ...state,
-    balance: state.balance - ECONOMY.slotPrice,
+    balance: state.balance - cost,
     slots: state.slots + 1,
   };
 }

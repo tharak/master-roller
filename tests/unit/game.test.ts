@@ -8,6 +8,7 @@ import {
   poolStats,
   rollGame,
   simulatePurchase,
+  slotCost,
 } from "../../src/game";
 
 describe("roll engine", () => {
@@ -83,21 +84,33 @@ describe("roll engine", () => {
   });
 });
 describe("slots and purchases", () => {
-  it("buys slots for a flat 50 and preserves dice", () => {
-    const initial = { ...newGame(), balance: 150 };
-    const next = buySlot(buySlot(buySlot(initial)));
+  it("charges 3, 6, 9 for consecutive slots and preserves dice", () => {
+    const initial = { ...newGame(), balance: 18 };
+    const second = buySlot(initial);
+    expect(second).toMatchObject({ slots: 2, balance: 15 });
+    const third = buySlot(second);
+    expect(third).toMatchObject({ slots: 3, balance: 9 });
+    const next = buySlot(third);
     expect(next.slots).toBe(4);
     expect(next.balance).toBe(0);
     expect(next.inventory).toEqual(initial.inventory);
     expect(buySlot(next)).toBe(next);
+    expect(slotCost(next.slots)).toBe(12);
+    const short = { ...next, balance: 11 };
+    expect(buySlot(short)).toBe(short);
+    // Existing version-2 saves need no new purchase counter.
+    expect(buySlot({ ...next, balance: 12 })).toMatchObject({
+      slots: 5,
+      balance: 0,
+    });
   });
   it.each(DICE)(
-    "$id preserves its starting price and requires a free slot",
+    "$id costs twice its average and requires a free slot",
     (die) => {
-      expect(die.price).toBe((20 * (die.min + die.max)) / 2);
+      expect(die.price).toBe(die.min + die.max);
       const full = {
         ...newGame(),
-        balance: die.price * 2 + ECONOMY.slotPrice * 2,
+        balance: die.price * 2 + 9,
       };
       expect(buyDie(full, die.id)).toBe(full);
       expect(simulatePurchase(full, die.id)).toBe(full);
@@ -123,5 +136,18 @@ describe("slots and purchases", () => {
     );
     expect(game.balance).toBe(2 * ECONOMY.coinPack);
     expect(game.slots).toBe(1);
+  });
+  it("minimum winning income through level 4 funds a d6 and its slot", () => {
+    let game = newGame();
+    for (let face = 1; face <= 4; face++)
+      game = rollGame(game, () => (face - 1) / 4);
+    expect(game.level).toBe(5);
+    expect(game.balance).toBe(10);
+    game = buyDie(buySlot(game), "d6");
+    expect(game).toMatchObject({
+      slots: 2,
+      balance: 0,
+      inventory: { d4: 1, d6: 1 },
+    });
   });
 });

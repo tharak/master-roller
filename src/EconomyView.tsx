@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { DICE } from "./game";
+import { DICE, slotCost } from "./game";
 import {
   defaultPrices,
   distribution,
-  validPrices,
+  DRAFT_KEY,
+  loadDraftPrices,
   type DraftPrices,
   type EconomyReport,
 } from "./economy";
 import "./economy.css";
+import EconomyTables from "./EconomyTables";
 
-const DRAFT_KEY = "master-roller:economy-draft:v1";
 const colors = [
   "#91bbff",
   "#bcabff",
@@ -28,10 +29,7 @@ function jumpTo(id: string) {
 }
 function initialPrices() {
   try {
-    const draft: unknown = JSON.parse(
-      localStorage.getItem(DRAFT_KEY) ?? "null",
-    );
-    return validPrices(draft) ? draft : defaultPrices();
+    return loadDraftPrices(localStorage);
   } catch {
     return defaultPrices();
   }
@@ -225,6 +223,9 @@ export default function EconomyView() {
           <nav className="analysis-nav" aria-label="Economy sections">
             <button onClick={() => jumpTo("dice-ranges")}>Dice values</button>
             <button onClick={() => jumpTo("prices-panel")}>Edit prices</button>
+            <button onClick={() => jumpTo("pool-tables")}>
+              Pool & budget tables
+            </button>
             <button onClick={() => jumpTo("upgrades-panel")}>
               Upgrade timing
             </button>
@@ -260,7 +261,7 @@ export default function EconomyView() {
                 type="number"
                 min="0"
                 max="20000"
-                step="10"
+                step="1"
                 value={prices.dice[die.id]}
                 onChange={(event) => {
                   const value = Number(event.target.value);
@@ -279,14 +280,14 @@ export default function EconomyView() {
           ))}
           <label className="price-row slot-price">
             <span>
-              Extra slot<small>Flat price per slot</small>
+              Slot base price<small>Next slot = base × owned slots</small>
             </span>
             <input
               aria-label="Draft slot price"
               type="number"
               min="0"
               max="20000"
-              step="10"
+              step="1"
               value={prices.slot}
               onChange={(event) => {
                 const value = Number(event.target.value);
@@ -308,6 +309,7 @@ export default function EconomyView() {
         </aside>
         <div className="analysis-charts">
           <DiceRanges />
+          <EconomyTables prices={prices} />
           <section className="analysis-card" aria-labelledby="pool-heading">
             <div className="chart-heading">
               <div>
@@ -354,7 +356,10 @@ export default function EconomyView() {
                 Next die + slot
                 <strong>
                   {stage < DICE.length - 1
-                    ? number(prices.dice[DICE[stage + 1].id] + prices.slot)
+                    ? number(
+                        prices.dice[DICE[stage + 1].id] +
+                          slotCost(stage + 1, prices.slot),
+                      )
                     : "Full set"}
                 </strong>
               </p>

@@ -11,28 +11,28 @@ Dice spread across a full-screen pool that adapts to the viewport, with the wall
 - Every tap of **Roll** rolls all your owned dice once.
 - Beat level X by rolling a combined total **at least X**. A win advances exactly one level.
 - Every roll earns **Dicecoin equal to its total**, on wins and losses. A losing roll stays on the current level.
-- Each die uses one slot. Buy an extra slot for **50 Dicecoin** before adding another die. Slot prices are flat; every owned die contributes to every roll.
+- Each die uses one slot. Buy extra slots for **3, 6, 9, 12… Dicecoin** before adding more dice. The next slot costs 3 × slots already owned; the starting slot is free. Every owned die contributes to every roll.
 - All seven dice roll **1 through their face count**, uniformly. d2 and d3 have been removed.
 
 | Die  | Range | Dicecoin price |
 | ---- | ----- | -------------: |
-| d4   | 1–4   |             50 |
-| d6   | 1–6   |             70 |
-| d8   | 1–8   |             90 |
-| d10  | 1–10  |            110 |
-| d12  | 1–12  |            130 |
-| d20  | 1–20  |            210 |
-| d100 | 1–100 |          1,010 |
+| d4   | 1–4   |              5 |
+| d6   | 1–6   |              7 |
+| d8   | 1–8   |              9 |
+| d10  | 1–10  |             11 |
+| d12  | 1–12  |             13 |
+| d20  | 1–20  |             21 |
+| d100 | 1–100 |            101 |
 
-The remaining die prices retain their previous starting values, equal to 20 × average roll. Balancing constants live in `src/game.ts`. Roll-total earnings and slot costs are live; draft prices in the economy lab do not change the game.
+Die prices equal 2 × average roll. A d6 costs 7 versus 10 for two d4s, whose average and maximum total are higher. The starting d4 is free. Clearing levels 1–4 guarantees at least 10 coins, enough for a d6 and the first extra slot. Balancing constants live in `src/game.ts`. Roll-total earnings and slot costs are live; draft prices in the economy lab do not change the game.
 
 ## Economy lab
 
-[Open the economy lab](https://tharak.github.io/master-roller/#economy), or use its link in the shop or help screen. Edit all seven die prices and the flat slot price, reset to live prices, compare every possible face and average, and inspect exact summed-pool probabilities at any level. Drafts persist separately from the game save.
+[Open the economy lab](https://tharak.github.io/master-roller/#economy), or use its link in the shop or help screen. Edit all seven die prices and the slot base price, reset to live prices, compare every possible face and average, and inspect exact summed-pool probabilities at any level. Pool comparison and guaranteed upgrade-budget tables include 2d4, previous spending, and increasing slot costs. With live prices, adding a d8 to d4 + d6 costs 15; adding two d4s costs 25, including both slots. Later guaranteed wallets are unavailable if an earlier purchase exceeds its budget. Drafts persist separately from the game save. Untouched old defaults update automatically; custom draft values are retained, with the slot value now serving as the scaling base.
 
 The upgrade analysis runs 200 seeded journeys: start with a free d4 and one slot, save for one of each next die in ascending order, and buy a slot with each upgrade. All owned dice keep rolling and each total becomes income. It graphs one representative earnings path against cumulative purchase budgets, highlights a 10th–90th percentile purchase window, and reports median purchase rolls/levels and rolls spent at an unreachable level. The free starting d4 price only affects extra copies, which this strategy does not buy.
 
-Runs stop after buying d100 or 2,000 rolls. Reached counts and conditional percentiles make capped runs visible. This is a comparison of that strategy, not an optimal-play claim. With current prices, the first d6 plus slot costs 120 and is bought on median roll 49 (middle 80%: 45–53), at median level 5 after 41 unreachable-level rolls. Buying d100 costs 1,920 cumulatively including all preceding upgrades and slots; median purchase roll is 144.
+Runs stop after buying d100 or 2,000 rolls. Reached counts and conditional percentiles make capped runs visible. This is a comparison of that strategy, not an optimal-play claim. With current prices, the first d6 plus slot costs 10 and is bought on median roll 5 (middle 80%: 4–6), at median level 4 with zero median unreachable-level rolls. Buying d100 costs 225 cumulatively including all preceding upgrades and increasing slot costs; median purchase roll is 17 (middle 80%: 16–19).
 
 ## Purchases and saves
 
@@ -42,7 +42,7 @@ Progress automatically saves in localStorage in the current browser. It does not
 
 Resolved rolls save once before their visual sequence finishes. Refreshing during the coin animation restores the completed result and reward without adding it again.
 
-Version 2 saves include slots and roll-total rewards. Valid version 1 saves migrate automatically: every d2/d3 becomes a d4, remaining dice and level/balance stay intact, and enough slots are granted for the collection. Obsolete last-roll history is cleared, and a notice explains the update. The original save, including that history, is backed up under `master-roller:save:v1-backup` before the new save is written. If backup fails, play remains available but the original save is not replaced. Invalid saves still require explicit recovery.
+Version 2 saves include slots and roll-total rewards. Existing capacity determines the next scaled slot price; this pricing update needs no save migration. Valid version 1 saves migrate automatically: every d2/d3 becomes a d4, remaining dice and level/balance stay intact, and enough slots are granted for the collection. Obsolete last-roll history is cleared, and a notice explains the update. The original save, including that history, is backed up under `master-roller:save:v1-backup` before the new save is written. If backup fails, play remains available but the original save is not replaced. Invalid saves still require explicit recovery.
 
 ## Development
 
