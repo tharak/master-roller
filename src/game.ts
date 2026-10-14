@@ -50,6 +50,18 @@ export const DICE = [
   },
 ] as const;
 export type DieId = (typeof DICE)[number]["id"];
+export interface MergeRecipe {
+  inputs: readonly [DieId, DieId];
+  output: DieId;
+}
+export const MERGE_RECIPES: MergeRecipe[] = DICE.flatMap((left, index) =>
+  DICE.slice(index).flatMap((right) => {
+    const result = DICE.find((die) => die.max === left.max + right.max);
+    return result
+      ? [{ inputs: [left.id, right.id] as const, output: result.id }]
+      : [];
+  }),
+);
 export const ECONOMY = { slotPrice: 3, coinPack: 10_000 } as const;
 // The starting slot is free; extra slots cost 1×, 2×, 3×… the base price.
 export function slotCost(
@@ -151,6 +163,30 @@ export function buySlot(state: GameState): GameState {
     balance: state.balance - cost,
     slots: state.slots + 1,
   };
+}
+export function availableMerges(state: GameState): MergeRecipe[] {
+  return MERGE_RECIPES.filter(({ inputs: [left, right] }) =>
+    left === right
+      ? state.inventory[left] >= 2
+      : state.inventory[left] >= 1 && state.inventory[right] >= 1,
+  );
+}
+export function mergeDice(
+  state: GameState,
+  left: DieId,
+  right: DieId,
+): GameState {
+  const recipe = availableMerges(state).find(
+    ({ inputs: [a, b] }) =>
+      (a === left && b === right) || (a === right && b === left),
+  );
+  if (!recipe) return state;
+  const inventory = { ...state.inventory };
+  inventory[left]--;
+  inventory[right]--;
+  inventory[recipe.output]++;
+  // Consumed dice cannot remain in lastRoll under the existing save contract.
+  return { ...state, inventory, lastRoll: null };
 }
 export type TestOffer = DieId | "coins";
 export function simulatePurchase(

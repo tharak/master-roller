@@ -26,11 +26,26 @@ Dice spread across a full-screen pool that adapts to the viewport, with the wall
 
 Die prices equal 2 × average roll. A d6 costs 7 versus 10 for two d4s, whose average and maximum total are higher. The starting d4 is free. Clearing levels 1–4 guarantees at least 10 coins, enough for a d6 and the first extra slot. Balancing constants live in `src/game.ts`. Roll-total earnings and slot costs are live; draft prices in the economy lab do not change the game.
 
+## Merging dice
+
+Open **Merge dice** in the shop to combine two owned dice for free when their maximum values add up to a supported die. Only available pairs are offered; identical types need two copies.
+
+| Input dice | Result |
+| ---------- | ------ |
+| d4 + d4    | d8     |
+| d4 + d6    | d10    |
+| d4 + d8    | d12    |
+| d6 + d6    | d12    |
+| d8 + d12   | d20    |
+| d10 + d10  | d20    |
+
+A merge consumes exactly those two copies and grants one result die. It frees one used slot, keeps all purchased capacity and coins, and leaves your level unchanged. The maximum total stays the same; the minimum drops by 1 and average income per roll drops by 0.5. Merging is optional and clears the previous roll’s faces/details so the consumed dice are not shown as current results. The merged collection saves immediately and rolls together on the next turn. Merges are unavailable while a roll animates.
+
 ## Economy lab
 
 [Open the economy lab](https://tharak.github.io/master-roller/#economy), or use its link in the shop or help screen. Edit all seven die prices and the slot base price, reset to live prices, compare every possible face and average, and inspect exact summed-pool probabilities at any level. Pool comparison and guaranteed upgrade-budget tables include 2d4, previous spending, and increasing slot costs. With live prices, adding a d8 to d4 + d6 costs 15; adding two d4s costs 25, including both slots. Later guaranteed wallets are unavailable if an earlier purchase exceeds its budget. Drafts persist separately from the game save. Untouched old defaults update automatically; custom draft values are retained, with the slot value now serving as the scaling base.
 
-The upgrade analysis runs 200 seeded journeys: start with a free d4 and one slot, save for one of each next die in ascending order, and buy a slot with each upgrade. All owned dice keep rolling and each total becomes income. It graphs one representative earnings path against cumulative purchase budgets, highlights a 10th–90th percentile purchase window, and reports median purchase rolls/levels and rolls spent at an unreachable level. The free starting d4 price only affects extra copies, which this strategy does not buy.
+The upgrade analysis runs 200 seeded journeys: start with a free d4 and one slot, save for one of each next die in ascending order, and buy a slot with each upgrade. These buy-only journeys do not use merges. All owned dice keep rolling and each total becomes income. It graphs one representative earnings path against cumulative purchase budgets, highlights a 10th–90th percentile purchase window, and reports median purchase rolls/levels and rolls spent at an unreachable level. The free starting d4 price only affects extra copies, which this strategy does not buy.
 
 Runs stop after buying d100 or 2,000 rolls. Reached counts and conditional percentiles make capped runs visible. This is a comparison of that strategy, not an optimal-play claim. With current prices, the first d6 plus slot costs 10 and is bought on median roll 5 (middle 80%: 4–6), at median level 4 with zero median unreachable-level rolls. Buying d100 costs 225 cumulatively including all preceding upgrades and increasing slot costs; median purchase roll is 17 (middle 80%: 16–19).
 

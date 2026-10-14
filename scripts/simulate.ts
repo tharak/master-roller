@@ -41,7 +41,7 @@ function simulate(seed: number, strategy: Strategy) {
   return { rolls, losses, purchases, slotsBought, dice: poolStats(game).count };
 }
 console.log(
-  `Progression through level 100. Roll-total earnings, live dice prices, slots cost ${ECONOMY.slotPrice} × owned slots; no test purchases. 100 seeds per strategy.`,
+  `Progression through level 100. Roll-total earnings, live dice prices, slots cost ${ECONOMY.slotPrice} × owned slots; no merges or test purchases. 100 seeds per strategy.`,
 );
 for (const strategy of ["d4-only", "next-die"] as const) {
   const runs = Array.from({ length: 100 }, (_, index) =>
@@ -65,6 +65,6 @@ for (const strategy of ["d4-only", "next-die"] as const) {
   );
 }
 console.log(
-  "Upgrade affordability: one of each next die, including its slot, 200 seeds.",
+  "Upgrade affordability: one of each next die, including its slot, no merges, 200 seeds.",
 );
 console.log(JSON.stringify(analyzeEconomy(defaultPrices()).upgrades));

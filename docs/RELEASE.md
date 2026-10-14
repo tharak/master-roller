@@ -1,5 +1,13 @@
 # Mobile Web Test Release — v0.1.0
 
+## Dice merging — #31
+
+The shop offers free merges whenever two owned dice’s maximums sum to a supported die’s maximum: d4+d4→d8, d4+d6→d10, d4+d8→d12, d6+d6→d12, d8+d12→d20 and d10+d10→d20. The rules derive recipes from DICE and require both copies for identical types. Each merge consumes two copies and grants one, preserving balance, level and purchased slots while freeing one used slot.
+
+The shop uses existing shapes with numeric maxima and explains the tradeoff: unchanged maximum, 0.5 less average income per roll. It offers only owned pairs, rejects stale/repeated invalid requests and blocks merges during roll animations. Merging clears old roll faces and details so the version-2 save remains valid after consuming dice; no schema migration is needed. Existing economy timing reports explicitly assume no merges.
+
+Validation: full gate with 62 unit checks, 70 desktop/mobile browser checks, type checking/build and unchanged buy-only progression reports. Coverage includes all recipes, reversed/missing/invalid pairs, repeated and chained merges, no charge, preserved capacity, reusing the freed slot, persistence after a previous roll, resulting roll totals and 320px layouts.
+
 ## Skip fast-forwards the remaining animation — #29
 
 Corrects #27’s interpretation: normal rolls again take about 4.7 seconds. Skip speeds up the remaining sequence to finish within one second of the click, preserving its current phase and the current frame of active flights. When less than one second remains, it retains the existing speed. Repeated clicks do not restart or extend the deadline, and each subsequent roll returns to normal speed.

@@ -9,6 +9,10 @@ import {
   rollGame,
   simulatePurchase,
   slotCost,
+  MERGE_RECIPES,
+  availableMerges,
+  mergeDice,
+  type DieId,
 } from "../../src/game";
 
 describe("roll engine", () => {
@@ -81,6 +85,89 @@ describe("roll engine", () => {
     expect(initial).toEqual(newGame());
     for (const value of [-1, 1, NaN, Infinity])
       expect(() => rollGame(initial, () => value)).toThrow();
+  });
+});
+describe("dice merging", () => {
+  const recipes: [DieId, DieId, DieId][] = [
+    ["d4", "d4", "d8"],
+    ["d4", "d6", "d10"],
+    ["d4", "d8", "d12"],
+    ["d6", "d6", "d12"],
+    ["d8", "d12", "d20"],
+    ["d10", "d10", "d20"],
+  ];
+  it("offers exactly the supported unordered pairs", () => {
+    expect(
+      MERGE_RECIPES.map((recipe) => [...recipe.inputs, recipe.output]),
+    ).toEqual(recipes);
+    expect(availableMerges(newGame())).toEqual([]);
+  });
+  it.each(recipes)(
+    "merges %s + %s into %s for free at full capacity",
+    (left, right, output) => {
+      const initial = {
+        ...newGame(),
+        slots: 2,
+        balance: 17,
+        level: 9,
+        inventory: Object.fromEntries(
+          DICE.map((die) => [
+            die.id,
+            Number(die.id === left) + Number(die.id === right),
+          ]),
+        ) as ReturnType<typeof newGame>["inventory"],
+      };
+      const before = structuredClone(initial);
+      const next = mergeDice(initial, left, right);
+      expect(initial).toEqual(before);
+      expect(next).toMatchObject({ slots: 2, balance: 17, level: 9 });
+      expect(next.inventory[output]).toBe(1);
+      expect(next.inventory[left]).toBe(0);
+      expect(next.inventory[right]).toBe(0);
+      expect(poolStats(next)).toEqual({
+        count: 1,
+        min: 1,
+        max: poolStats(initial).max,
+      });
+      expect(mergeDice(initial, right, left)).toEqual(next);
+      const rolled = rollGame(next, () => 0.99);
+      expect(rolled.lastRoll?.total).toBe(poolStats(initial).max);
+      expect(rolled.lastRoll?.dice).toEqual([
+        { id: output, values: [poolStats(initial).max] },
+      ]);
+    },
+  );
+  it("rejects missing copies and unsupported or unknown sums without mutation", () => {
+    const initial = { ...newGame(), slots: 10 };
+    expect(mergeDice(initial, "d4", "d4")).toBe(initial);
+    expect(mergeDice(initial, "d4", "d6")).toBe(initial);
+    const rich = {
+      ...initial,
+      inventory: Object.fromEntries(
+        DICE.map((die) => [die.id, 1]),
+      ) as typeof initial.inventory,
+    };
+    expect(mergeDice(rich, "d6", "d8")).toBe(rich);
+    expect(mergeDice(rich, "d100", "d4")).toBe(rich);
+    expect(mergeDice(rich, "d2" as DieId, "d4")).toBe(rich);
+  });
+  it("supports chained merges, keeps unconsumed copies and guards repeated consumption", () => {
+    const initial = {
+      ...newGame(),
+      slots: 4,
+      inventory: { ...newGame().inventory, d4: 3, d6: 1 },
+    };
+    const first = mergeDice(initial, "d4", "d4");
+    expect(first.inventory).toMatchObject({ d4: 1, d6: 1, d8: 1 });
+    expect(mergeDice(first, "d4", "d4")).toBe(first);
+    expect(availableMerges(first).map((recipe) => recipe.output)).toEqual([
+      "d10",
+      "d12",
+    ]);
+    const second = mergeDice(first, "d4", "d8");
+    expect(second.inventory).toMatchObject({ d4: 0, d6: 1, d8: 0, d12: 1 });
+    expect(poolStats(second)).toEqual({ count: 2, min: 2, max: 18 });
+    expect(slotCost(second.slots)).toBe(slotCost(initial.slots));
   });
 });
 describe("slots and purchases", () => {

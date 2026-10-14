@@ -146,10 +146,10 @@ export default function EconomyTables({ prices }: { prices: DraftPrices }) {
         </div>
         <p className="analysis-note">
           Assume purchases happen at these checkpoints, with every owned die
-          still rolling. The first two rows are alternatives. The last two
-          assume you bought the d6 at level 4: subtract its dice + slot cost,
-          then add at least 5 + 6 + 7 + 8 + 9 + 10 = 45 coins from the next
-          levels. Losses and overshoots add income, so these are guaranteed
+          still rolling and no merges. The first two rows are alternatives. The
+          last two assume you bought the d6 at level 4: subtract its dice + slot
+          cost, then add at least 5 + 6 + 7 + 8 + 9 + 10 = 45 coins from the
+          next levels. Losses and overshoots add income, so these are guaranteed
           lower bounds, not average wallets. A dash means the earlier purchase
           does not fit the guaranteed budget; extra earnings may still fund it.
         </p>
