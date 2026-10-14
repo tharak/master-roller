@@ -8,6 +8,7 @@ import {
 import {
   buyDie,
   buySlot,
+  dieCost,
   mergeDice,
   DICE,
   ECONOMY,
@@ -153,7 +154,12 @@ export default function App() {
   useEffect(() => {
     if (saveStatus === "invalid") return;
     try {
-      const saved = saveGame(window.localStorage, game, legacyBackup.current);
+      const saved = saveGame(
+        window.localStorage,
+        game,
+        legacyBackup.current,
+        initial.backupKey,
+      );
       if (saved) legacyBackup.current = undefined;
       setSaveStatus(saved ? "saved" : "unavailable");
     } catch {
@@ -509,8 +515,9 @@ export default function App() {
       <main className="game-main">
         {migrationNotice && saveStatus !== "unavailable" && (
           <p className="warning migration-notice" role="status">
-            Your d2/d3 became d4. Slots were added for your collection; level
-            and coins were kept.{" "}
+            {initial.migratedFrom === 1
+              ? "Your d2/d3 became d4. Slots were added for your collection; level and coins were kept. "
+              : "Prices now double with purchases. Your dice, coins, level and slots were kept. Existing copies set your starting purchase counts. "}
             <button
               className="text-button"
               onClick={() => setMigrationNotice(false)}
@@ -693,11 +700,21 @@ export default function App() {
               </div>
               <button
                 className="buy-button"
-                aria-label={`Buy slot for ${slotCost(game.slots)} Dicecoin`}
+                aria-label={
+                  Number.isFinite(slotCost(game.slots))
+                    ? `Buy slot for ${slotCost(game.slots)} Dicecoin`
+                    : "Slot price limit reached"
+                }
                 disabled={rolling || game.balance < slotCost(game.slots)}
                 onClick={purchaseSlot}
               >
-                + Slot <Coin amount={slotCost(game.slots)} />
+                {Number.isFinite(slotCost(game.slots)) ? (
+                  <>
+                    + Slot <Coin amount={slotCost(game.slots)} />
+                  </>
+                ) : (
+                  "Limit reached"
+                )}
               </button>
             </div>
             <div className="shop-grid">
@@ -724,11 +741,24 @@ export default function App() {
                   </div>
                   <button
                     className="buy-button"
-                    aria-label={`Buy ${die.id} for ${die.price} Dicecoin`}
-                    disabled={rolling || game.balance < die.price || !hasRoom}
+                    aria-label={
+                      Number.isFinite(dieCost(game, die.id))
+                        ? `Buy ${die.id} for ${dieCost(game, die.id)} Dicecoin`
+                        : `${die.id} price limit reached`
+                    }
+                    disabled={
+                      rolling ||
+                      !Number.isFinite(dieCost(game, die.id)) ||
+                      game.balance < dieCost(game, die.id) ||
+                      !hasRoom
+                    }
                     onClick={() => buy(die.id)}
                   >
-                    <Coin amount={die.price} />
+                    {Number.isFinite(dieCost(game, die.id)) ? (
+                      <Coin amount={dieCost(game, die.id)} />
+                    ) : (
+                      "Limit reached"
+                    )}
                     <span aria-hidden="true">+</span>
                   </button>
                 </article>
@@ -808,9 +838,10 @@ export default function App() {
             <p className="modal-copy">
               Start with one d4 in one free slot. Extra slots cost{" "}
               {ECONOMY.slotPrice}, {ECONOMY.slotPrice * 2},{" "}
-              {ECONOMY.slotPrice * 3} Dicecoin and so on, increasing by{" "}
-              {ECONOMY.slotPrice} each time. Each owned die uses one slot and
-              joins every roll.
+              {ECONOMY.slotPrice * 4} Dicecoin and so on, doubling each time.
+              Each paid die purchase also doubles that type’s next price;
+              merging does not reset it. Each owned die uses one slot and joins
+              every roll.
             </p>
             <p className="modal-copy">
               Dice roll 1 through their face count. Buy an empty slot before

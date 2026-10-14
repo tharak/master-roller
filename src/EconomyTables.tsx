@@ -1,4 +1,4 @@
-import { DICE, slotCost, type DieId } from "./game";
+import { DICE, exponentialCost, slotCost, type DieId } from "./game";
 import {
   comparePool,
   earlyUpgradeChoices,
@@ -24,8 +24,9 @@ export default function EconomyTables({ prices }: { prices: DraftPrices }) {
       >
         <h2 id="comparison-heading">Compare whole pools</h2>
         <p>
-          Live dice prices are twice the average roll. Compare a single die with
-          combinations; the prices below follow your draft edits.
+          Starting prices are twice the average roll. Each paid purchase doubles
+          that type’s next price. Compare whole pools; prices below include
+          repeat purchases and follow your draft edits.
         </p>
         <div className="table-scroll">
           <table className="value-table">
@@ -69,10 +70,10 @@ export default function EconomyTables({ prices }: { prices: DraftPrices }) {
         </div>
         <p className="analysis-note">
           Dice prices exclude slots and the free starting die. Two d4s cost{" "}
-          {number(prices.dice.d4 * 2)} to buy as a set; adding just one to your
-          starter costs {number(prices.dice.d4)} plus a slot. 2d4 averages 5
-          versus d6’s 3.5 and d8’s 4.5. A d8 has a higher chance of rolling 7 or
-          8 and uses one slot.
+          {number(comparePool(["d4", "d4"], prices).diceCost)} to buy as a set;
+          adding just one to your starter costs {number(prices.dice.d4)} plus a
+          slot. 2d4 averages 5 versus d6’s 3.5 and d8’s 4.5. A d8 has a higher
+          chance of rolling 7 or 8 and uses one slot.
         </p>
       </section>
       <section className="analysis-card" aria-labelledby="budget-heading">
@@ -85,8 +86,7 @@ export default function EconomyTables({ prices }: { prices: DraftPrices }) {
               Clearing levels 1–4 with a d4 guarantees at least 1 + 2 + 3 + 4 =
               10 Dicecoin. Extra slots cost {number(slotCost(1, prices.slot))},{" "}
               {number(slotCost(2, prices.slot))},{" "}
-              {number(slotCost(3, prices.slot))} and so on: base price × slots
-              already owned.
+              {number(slotCost(3, prices.slot))} and so on, doubling each time.
             </p>
           </div>
           <span
@@ -152,6 +152,49 @@ export default function EconomyTables({ prices }: { prices: DraftPrices }) {
           next levels. Losses and overshoots add income, so these are guaranteed
           lower bounds, not average wallets. A dash means the earlier purchase
           does not fit the guaranteed budget; extra earnings may still fund it.
+        </p>
+      </section>
+      <section className="analysis-card" aria-labelledby="repeat-heading">
+        <h2 id="repeat-heading">Prices double with purchases</h2>
+        <p>
+          Each die type has its own paid purchase count. The starter and free
+          Test Lab grants do not increase it. Merging never resets it.
+        </p>
+        <div className="table-scroll">
+          <table className="value-table">
+            <caption>Exponential purchase prices</caption>
+            <thead>
+              <tr>
+                <th>Purchase</th>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <th key={n}>#{n}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {DICE.map((die) => (
+                <tr key={die.id}>
+                  <th scope="row">{die.id}</th>
+                  {[0, 1, 2, 3, 4].map((n) => (
+                    <td key={n}>
+                      {number(exponentialCost(prices.dice[die.id], n))}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              <tr>
+                <th scope="row">Extra slot</th>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <td key={n}>{number(slotCost(n, prices.slot))}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="analysis-note">
+          Draft edits change starting prices. The timing simulation below buys
+          each next die once; it includes exponential slot costs, while repeat
+          die costs apply when buying extra copies.
         </p>
       </section>
     </>

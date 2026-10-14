@@ -133,10 +133,29 @@ test("pool comparison and checkpoint budgets update with draft prices", async ({
     name: "Guaranteed upgrade budgets",
   });
   await expect(pools).toBeVisible();
+  const repeats = page.getByRole("table", {
+    name: "Exponential purchase prices",
+  });
+  const d4Prices = repeats
+    .getByRole("row")
+    .filter({ has: page.getByRole("rowheader", { name: "d4", exact: true }) });
+  await expect(d4Prices.getByRole("cell")).toHaveText([
+    "5",
+    "10",
+    "20",
+    "40",
+    "80",
+  ]);
+  await expect(
+    repeats
+      .getByRole("row")
+      .filter({ hasText: "Extra slot" })
+      .getByRole("cell"),
+  ).toHaveText(["3", "6", "12", "24", "48"]);
   const pair = pools
     .getByRole("row")
     .filter({ has: page.getByRole("rowheader", { name: "2d4", exact: true }) });
-  await expect(pair.getByRole("cell")).toHaveText(["2", "2–8", "5", "8", "10"]);
+  await expect(pair.getByRole("cell")).toHaveText(["2", "2–8", "5", "8", "15"]);
   const rows = budgets.locator("tbody tr");
   await expect(rows.nth(1).getByRole("cell")).toHaveText([
     "Level 4",
@@ -148,10 +167,17 @@ test("pool comparison and checkpoint budgets update with draft prices", async ({
     "Fits",
   ]);
   await expect(rows.nth(2).getByRole("cell").nth(3)).toHaveText("15");
-  await expect(rows.nth(3).getByRole("cell").nth(3)).toHaveText("25");
+  await expect(rows.nth(3).getByRole("cell").nth(3)).toHaveText("33");
   await page.getByLabel("d4 draft price", { exact: true }).fill("6");
-  await expect(pair.getByRole("cell").last()).toHaveText("12");
-  await expect(rows.nth(3).getByRole("cell").nth(3)).toHaveText("27");
+  await expect(d4Prices.getByRole("cell")).toHaveText([
+    "6",
+    "12",
+    "24",
+    "48",
+    "96",
+  ]);
+  await expect(pair.getByRole("cell").last()).toHaveText("18");
+  await expect(rows.nth(3).getByRole("cell").nth(3)).toHaveText("36");
   await page.getByLabel("Draft slot price", { exact: true }).fill("4");
   await expect(rows.nth(1).getByRole("cell").last()).toHaveText("Short 1");
   await expect(rows.nth(2).getByRole("cell").nth(1)).toHaveText("—");

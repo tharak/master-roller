@@ -1,5 +1,17 @@
 # Mobile Web Test Release — v0.1.0
 
+## Exponential repeat-purchase prices — #33
+
+Every paid purchase doubles that die type’s next price, starting from 5/7/9/11/13/21/101. Extra slots double from 3: 3, 6, 12, 24… Dicecoin. The free starter remains, and clearing levels 1–4 still guarantees the 10 coins for the first d6 plus slot. Merges preserve purchase counts; free Test Lab grants do not increase them. Unrepresentable prices become unavailable instead of wrapping or falling back to cheaper costs.
+
+Version 3 saves persist per-type paid counts. Valid v1/v2 progress migrates with source backups before replacement. Existing copies initialize purchase counts, excluding one starter d4; older purchase/merge/free-grant history cannot be reconstructed. Dice, coins, levels and capacity stay intact. Version 1 converts removed dice and clears obsolete history as before; version 2 retains roll history. Invalid saves and failed backups are not overwritten.
+
+The Economy page now includes a repeat-price table and recalculates pool comparisons, checkpoint budgets and timing reports with exponential prices. Draft starting prices remain editable and custom drafts are preserved. Adding two d4s at the level-10 checkpoint now costs 33 including repeat prices and slots. One of each die through d100 costs 351 cumulatively, with median d100 purchase roll 22 (middle 80%: 20–24).
+
+Buy-only level-100 simulations report reached/capped runs with a 10,000-roll limit. Next-die buying clears 100/100 seeds in 103 rolls on average and ends with 12 dice; d4-only buying caps all 100 seeds, averaging level 55.1 and 16 dice. These are strategy comparisons, not optimal-play claims. Prices were not altered to satisfy simulations.
+
+Validation: full gate with 69 unit checks, 80 desktop/mobile browser checks, type checking/build and seeded reports. Coverage includes independent doubling, rapid purchase pricing, merging/reload continuity, free grants, migration backups/failures, invalid counters, repeat-price draft updates and unavailable overflow prices.
+
 ## Dice merging — #31
 
 The shop offers free merges whenever two owned dice’s maximums sum to a supported die’s maximum: d4+d4→d8, d4+d6→d10, d4+d8→d12, d6+d6→d12, d8+d12→d20 and d10+d10→d20. The rules derive recipes from DICE and require both copies for identical types. Each merge consumes two copies and grants one, preserving balance, level and purchased slots while freeing one used slot.
