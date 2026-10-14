@@ -11,6 +11,7 @@ import {
   type TestOffer,
 } from "./game";
 import { loadGame, saveGame, type SaveStatus } from "./storage";
+import DieShape, { DIE_SHAPES } from "./DieShape";
 
 type RollPhase =
   | "idle"
@@ -227,7 +228,7 @@ export default function App() {
     setGame(newGame());
     setSaveStatus("saved");
     setModal(null);
-    setMessage("Reset");
+    setMessage("");
   }
   const last = game.lastRoll;
   const awaitingCredit =
@@ -238,12 +239,9 @@ export default function App() {
     rolling && phase !== "collected" && last && phase !== "rolling"
       ? last.level
       : game.level;
-  const showSum = ["total", "reward", "crediting", "collected"].includes(phase);
-  const showOutcome =
-    phase === "idle" ||
-    phase === "reward" ||
-    phase === "crediting" ||
-    phase === "collected";
+  const showSum =
+    Boolean(last) &&
+    ["idle", "total", "reward", "crediting", "collected"].includes(phase);
 
   const visibleDice = DICE.flatMap((die) => {
     const values =
@@ -254,7 +252,6 @@ export default function App() {
         die,
         index,
         value: values[index],
-        remaining: index === 5 ? game.inventory[die.id] - 6 : 0,
       }),
     );
   });
@@ -300,7 +297,7 @@ export default function App() {
           </p>
         )}
         <section
-          className={`arena phase-${phase} ${phase === "rolling" ? "is-rolling" : ""} ${last?.won && showOutcome ? "is-win" : ""}`}
+          className={`arena phase-${phase} ${phase === "rolling" ? "is-rolling" : ""}`}
           aria-label="Roll arena"
           data-phase={phase}
         >
@@ -312,24 +309,20 @@ export default function App() {
           </div>
           <section
             ref={diceField}
-            className="dice-field"
+            className={`dice-field ${last && phase === "idle" ? "has-total" : ""}`}
             aria-label="Your collection"
+            aria-description={`${stats.count} ${stats.count === 1 ? "die" : "dice"}`}
           >
-            <div
-              className="dice-count"
-              aria-label={`${stats.count} ${stats.count === 1 ? "die" : "dice"}`}
-            >
-              {number(stats.count)} {stats.count === 1 ? "die" : "dice"}
-            </div>
             <div
               className={`dice-grid ${visibleDice.length === 1 ? "single-die" : ""}`}
             >
-              {visibleDice.map(({ die, index, value, remaining }) => (
+              {visibleDice.map(({ die, index, value }) => (
                 <div
-                  className={`play-die ${die.color} ${value === undefined ? "unrolled" : ""}`}
+                  className={`play-die ${die.color} die-${die.id} ${value === undefined ? "unrolled" : ""}`}
                   key={`${die.id}-${index}`}
                   aria-label={`${die.id} ${value === undefined ? "not rolled yet" : `rolled ${value}`}`}
                 >
+                  <DieShape id={die.id} />
                   <span className="die-type">{die.id}</span>
                   <strong className="die-value">
                     {phase === "rolling"
@@ -338,67 +331,32 @@ export default function App() {
                         ? "?"
                         : value}
                   </strong>
-                  {index === 0 && game.inventory[die.id] > 1 && (
-                    <span className="die-quantity">
-                      ×{number(game.inventory[die.id])}
-                    </span>
-                  )}
-                  {remaining > 0 && (
-                    <span
-                      className="extra-dice"
-                      title="Additional dice also roll"
-                    >
-                      +{number(remaining)}
-                    </span>
-                  )}
                 </div>
               ))}
             </div>
             <div
               ref={sumAnchor}
-              className={`sum-burst ${showSum ? "sum-visible" : ""}`}
+              className={`sum-burst ${showSum ? "sum-visible" : ""} ${last && phase === "idle" ? "sum-settled" : ""}`}
               aria-hidden="true"
             >
-              <span>TOTAL</span>
-              <strong>{last ? number(last.total) : ""}</strong>
+              <strong data-testid="roll-total">
+                {last ? number(last.total) : ""}
+              </strong>
             </div>
-          </section>
-          <div
-            className="result-area"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {last && showOutcome ? (
-              <>
-                <div className={`roll-total ${rolling ? "total-pending" : ""}`}>
-                  <span>TOTAL</span>
-                  <strong data-testid="roll-total">{number(last.total)}</strong>
-                </div>
-                <div className={`outcome ${last.won ? "won" : "lost"}`}>
-                  <strong>{last.won ? "CLEARED!" : "TRY AGAIN"}</strong>
-                  <span
-                    ref={reward}
-                    className={`earned-reward ${phase !== "reward" ? "reward-departed" : ""}`}
-                  >
-                    +{last.reward} <Coin />
-                  </span>
-                  <span className="sr-only">
-                    Level {last.level}. Rolled {last.total}, target {last.level}
-                    .
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className="ready-label">
-                {phase === "idle"
-                  ? "TAP TO ROLL"
-                  : phase === "rolling"
-                    ? "ROLLING…"
-                    : "\u00a0"}
-              </div>
+            {last && (
+              <span
+                ref={reward}
+                className={`earned-reward ${phase !== "reward" ? "reward-departed" : ""}`}
+              >
+                +{last.reward} <Coin />
+              </span>
             )}
-          </div>
+          </section>
+          <span className="sr-only" role="status" aria-live="polite">
+            {last && showSum
+              ? `Total ${last.total}. ${last.won ? "Level cleared." : "Try again."} Earned ${last.reward} Dicecoin.`
+              : ""}
+          </span>
         </section>
         <div className="controls">
           <button
@@ -438,13 +396,6 @@ export default function App() {
           <span className="coin-trail" />
         </div>
       )}
-      <div
-        className={`toast ${message && !modal ? "visible" : ""}`}
-        role="status"
-        aria-live="polite"
-      >
-        {!modal ? message : ""}
-      </div>
       <dialog
         ref={dialog}
         className={`modal ${modal === "shop" ? "shop-modal" : ""}`}
@@ -485,8 +436,12 @@ export default function App() {
                   key={die.id}
                   aria-label={`${die.id} shop item`}
                 >
-                  <div className="shop-die-type">
-                    {die.id}
+                  <div
+                    className={`shop-die-type die-${die.id}`}
+                    aria-description={DIE_SHAPES[die.id]}
+                  >
+                    <DieShape id={die.id} />
+                    <strong>{die.id}</strong>
                     <span className="owned">
                       ×{number(game.inventory[die.id])}
                     </span>

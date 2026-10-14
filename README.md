@@ -4,7 +4,7 @@
 
 A small dice collection game built for phones. Start with one d2, earn Dicecoin, buy more dice, and keep climbing.
 
-Dice sit directly on the main game board and show their rolled faces. They fly together to reveal the total, then earned Dicecoin flies into the wallet before its displayed balance increases. Tap the **wallet** to open the shop; **?** holds the rules and last-roll details. Large stacks show six dice plus an extra-copy count, and every owned copy still contributes to the total. Reduced-motion mode resolves rolls immediately.
+Dice sit directly on the main game board and show their rolled faces. Each type has its own shape, from a d2 coin and d4 pyramid to a faceted d100 sphere. They fly together to reveal the total, which stays visible inside the pool after the sequence. Earned Dicecoin flies into the wallet before its displayed balance increases. Tap the **wallet** to open the shop; **?** holds the rules and last-roll details. Large stacks show up to six copies per type; quantities remain in the shop and every owned copy contributes to the total. Reduced-motion mode resolves rolls immediately.
 
 ## How to play
 
