@@ -109,6 +109,11 @@ export default function App() {
         [
           { transform: getComputedStyle(die).transform, opacity: 1 },
           {
+            transform: `translate(${x * 0.3}px, ${y * 0.3 - 65}px) rotate(${index % 2 ? 35 : -35}deg) scale(1.08)`,
+            opacity: 1,
+            offset: 0.38,
+          },
+          {
             transform: `translate(${x}px, ${y}px) rotate(${index % 2 ? 160 : -160}deg) scale(0.08)`,
             opacity: 0,
           },
