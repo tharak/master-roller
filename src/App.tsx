@@ -18,6 +18,7 @@ import {
 } from "./game";
 import { loadGame, saveGame, type SaveStatus } from "./storage";
 import DieShape, { DIE_SHAPES } from "./DieShape";
+import Shatter from "./Shatter";
 
 type RollPhase =
   | "idle"
@@ -25,11 +26,55 @@ type RollPhase =
   | "faces"
   | "gathering"
   | "total"
+  | "targeting"
+  | "impact"
+  | "leveling"
   | "reward"
   | "crediting"
   | "collected";
 
 const number = (value: number) => value.toLocaleString("en-US");
+function LevelText({ level, live = false }: { level: number; live?: boolean }) {
+  return (
+    <span className="level-copy">
+      <span className="level-label">LEVEL</span>
+      <span className="target-value">
+        <span data-testid={live ? "target" : undefined}>{number(level)}</span>
+      </span>
+    </span>
+  );
+}
+function ResultDie({
+  die,
+  total,
+  size,
+  live = false,
+}: {
+  die: (typeof DICE)[number];
+  total: number;
+  size?: number;
+  live?: boolean;
+}) {
+  return (
+    <div
+      className={`result-die ${die.color} die-${die.id}`}
+      style={
+        {
+          "--value-ratio": 0.42 / Math.max(1, number(total).length / 2),
+          ...(size ? { "--die-size": `${size}px` } : {}),
+        } as CSSProperties
+      }
+    >
+      <DieShape id={die.id} />
+      <strong
+        className="die-value"
+        data-testid={live ? "roll-total" : undefined}
+      >
+        {number(total)}
+      </strong>
+    </div>
+  );
+}
 function Coin({ amount }: { amount?: number }) {
   return (
     <span className="coin-label">
@@ -64,6 +109,9 @@ export default function App() {
   const diceField = useRef<HTMLElement>(null);
   const diceGrid = useRef<HTMLDivElement>(null);
   const sumAnchor = useRef<HTMLDivElement>(null);
+  const totalFlight = useRef<HTMLDivElement>(null);
+  const levelTarget = useRef<HTMLDivElement>(null);
+  const [impactBox, setImpactBox] = useState<CSSProperties>({});
   const wallet = useRef<HTMLButtonElement>(null);
   const reward = useRef<HTMLSpanElement>(null);
   const coinFlight = useRef<HTMLDivElement>(null);
@@ -105,7 +153,12 @@ export default function App() {
     > = {
       rolling: { delay: 550, next: "faces" },
       faces: { delay: 280, next: "gathering" },
-      total: { delay: 350, next: "reward" },
+      total: { delay: 450, next: "targeting" },
+      impact: {
+        delay: 500,
+        next: gameRef.current.lastRoll?.won ? "leveling" : "reward",
+      },
+      leveling: { delay: 300, next: "reward" },
       reward: { delay: 500, next: "crediting" },
       collected: { delay: 220, next: "idle" },
     };
@@ -119,6 +172,75 @@ export default function App() {
     }, transition.delay);
     return () => clearTimeout(timer);
   }, [phase]);
+
+  useLayoutEffect(() => {
+    if (
+      phase !== "targeting" ||
+      !sumAnchor.current ||
+      !levelTarget.current ||
+      !totalFlight.current
+    )
+      return;
+    const source = sumAnchor.current.querySelector(".result-die")!;
+    const from = source.getBoundingClientRect();
+    const to = levelTarget.current
+      .querySelector(".level-copy")!
+      .getBoundingClientRect();
+    const flyer = totalFlight.current;
+    Object.assign(flyer.style, {
+      left: `${from.left}px`,
+      top: `${from.top}px`,
+      width: `${from.width}px`,
+      height: `${from.height}px`,
+    });
+    const scale = Math.min(1, 60 / from.width);
+    const x = to.left + to.width / 2 - from.left - from.width / 2;
+    // The total's leading edge touches the level text on arrival.
+    const y =
+      to.bottom + (from.height * scale) / 2 - from.top - from.height / 2;
+    const won = gameRef.current.lastRoll!.won;
+    setImpactBox(
+      won
+        ? {
+            left: to.left,
+            top: to.top,
+            width: to.width,
+            height: to.height,
+          }
+        : {
+            left: to.left + to.width / 2 - (from.width * scale) / 2,
+            top: to.bottom,
+            width: from.width * scale,
+            height: from.height * scale,
+          },
+    );
+    const animation = flyer.animate(
+      [
+        { transform: "translate(0, 0) scale(1)", opacity: 1 },
+        {
+          transform: `translate(${x * 0.2}px, ${y * 0.25}px) scale(.85)`,
+          opacity: 1,
+          offset: 0.3,
+        },
+        { transform: `translate(${x}px, ${y}px) scale(${scale})`, opacity: 1 },
+      ],
+      {
+        duration: 600,
+        easing: "cubic-bezier(.5, 0, .8, .5)",
+        fill: "forwards",
+      },
+    );
+    let active = true;
+    void animation.finished
+      .then(() => {
+        if (active) setPhase("impact");
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      animation.cancel();
+    };
+  }, [phase, poolSize]);
 
   useLayoutEffect(() => {
     if (phase !== "gathering" || !sumAnchor.current || !diceField.current)
@@ -261,12 +383,12 @@ export default function App() {
   const displayedBalance =
     game.balance - (awaitingCredit ? (last?.reward ?? 0) : 0);
   const displayedLevel =
-    rolling && phase !== "collected" && last && phase !== "rolling"
+    last &&
+    ["faces", "gathering", "total", "targeting", "impact"].includes(phase)
       ? last.level
       : game.level;
   const showSum =
-    Boolean(last) &&
-    ["total", "reward", "crediting", "collected"].includes(phase);
+    Boolean(last) && ["total", "targeting", "impact"].includes(phase);
 
   const visibleDice = DICE.flatMap((die) => {
     const values =
@@ -280,6 +402,7 @@ export default function App() {
       }),
     );
   });
+  const resultDie = visibleDice.at(-1)!.die;
   // Use the grid's content box so dice stay clear of the overlaid controls.
   let columns = 1;
   let availableSize = 0;
@@ -341,15 +464,12 @@ export default function App() {
           </p>
         )}
         <section
-          className={`arena phase-${phase} ${phase === "rolling" ? "is-rolling" : ""}`}
+          className={`arena phase-${phase} ${last?.won ? "roll-win" : "roll-loss"} ${phase === "rolling" ? "is-rolling" : ""}`}
           aria-label="Roll arena"
           data-phase={phase}
         >
-          <div className="level-target">
-            <span className="level-label">LEVEL</span>
-            <div className="target-value">
-              <span data-testid="target">{number(displayedLevel)}</span>
-            </div>
+          <div ref={levelTarget} className="level-target">
+            <LevelText level={displayedLevel} live />
           </div>
           <section
             ref={diceField}
@@ -387,12 +507,14 @@ export default function App() {
             </div>
             <div
               ref={sumAnchor}
-              className={`sum-burst ${showSum ? "sum-visible" : ""}`}
+              className={`sum-burst ${phase === "total" ? "sum-visible" : ""}`}
               aria-hidden="true"
             >
-              <strong data-testid="roll-total">
-                {last && showSum ? number(last.total) : ""}
-              </strong>
+              {last && showSum ? (
+                <ResultDie die={resultDie} total={last.total} live />
+              ) : (
+                <strong data-testid="roll-total" />
+              )}
             </div>
             {last && (
               <span
@@ -403,6 +525,23 @@ export default function App() {
               </span>
             )}
           </section>
+          {phase === "targeting" && last && (
+            <div ref={totalFlight} className="total-flight" aria-hidden="true">
+              <ResultDie die={resultDie} total={last.total} />
+            </div>
+          )}
+          {phase === "impact" && last && (
+            <Shatter
+              className={last.won ? "level-shatter" : "total-shatter"}
+              style={impactBox}
+            >
+              {last.won ? (
+                <LevelText level={last.level} />
+              ) : (
+                <ResultDie die={resultDie} total={last.total} size={60} />
+              )}
+            </Shatter>
+          )}
           <span className="sr-only" role="status" aria-live="polite">
             {last
               ? `Total ${last.total}. ${last.won ? "Level cleared." : "Try again."} Earned ${last.reward} Dicecoin.`
