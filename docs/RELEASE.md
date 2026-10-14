@@ -45,3 +45,9 @@ All nine dice are text labels. All test-purchase offers are free simulations. Sa
 Replaced the text-heavy page with a single game board: owned dice and rolled faces in the center, the target above, and Roll plus a compact shop button below. Rules and roll details are available on demand. The shop is a compact three-column dialog. Existing rules, prices, and saves are preserved.
 
 Validation now includes 16 desktop/mobile browser checks, including on-screen die faces, newly bought dice joining the board, the Roll button fitting a 390 × 844 viewport, and all 51 dice contributing to a large-pool roll. The original 44 unit tests and 200 progression simulations still pass.
+
+## Roll animation update — #11
+
+Dice tumble, show their faces, fly into a sum, then reveal earned Dicecoin. The reward flies from the result into the wallet; the displayed balance increases on arrival. The wallet opens the shop, replacing the separate dice button. The level has no comparison symbol.
+
+The sequence prevents overlapping rolls and purchases. Complete results are saved once before presentation finishes, so a refresh during flight preserves the reward without duplicating it. Reduced-motion mode completes immediately. Six new desktop/mobile checks cover win/loss sequence ordering, delayed wallet credit, and refreshing during the flight, bringing the browser suite to 22 checks.

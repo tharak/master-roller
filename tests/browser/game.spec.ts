@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function section(page: Page, name: "Play" | "Dice shop") {
   if (name === "Dice shop") {
-    await page.getByRole("button", { name: "Dice shop", exact: true }).click();
+    await page.getByRole("button", { name: /Dicecoin$/ }).click();
   } else if (await page.getByRole("dialog").isVisible()) {
     await page
       .getByRole("button", { name: "Close dice shop", exact: true })
@@ -204,9 +204,7 @@ test("fits narrow screens, keyboard controls work, and reduced motion resolves r
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Dice shop", exact: true }),
-  ).toBeFocused();
+  await expect(page.getByRole("button", { name: /Dicecoin$/ })).toBeFocused();
 });
 
 test("dice are on the main screen and show each rolled face", async ({
@@ -279,4 +277,120 @@ test("large collections still roll every die and expose all die types", async ({
     page.getByLabel("d100 rolled 100", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("+44", { exact: true })).toBeVisible();
+});
+
+for (const scenario of [
+  { name: "win", random: 0.99, earned: 20, total: 1, level: 2 },
+  { name: "loss", random: 0, earned: 10, total: 0, level: 1 },
+]) {
+  test(`${scenario.name}: dice gather before the sum and coins credit only on arrival`, async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+    await page.addInitScript((value) => {
+      Math.random = () => value;
+    }, scenario.random);
+    await page.goto("./");
+    const arena = page.getByRole("region", { name: "Roll arena" });
+    const wallet = page.getByRole("button", {
+      name: "0 Dicecoin",
+      exact: true,
+    });
+    await expect(page.locator(".target-value")).toHaveText("1");
+    await expect(page.locator(".controls button")).toHaveCount(1);
+    await wallet.click();
+    await expect(page.getByRole("dialog", { name: "Dice shop" })).toBeVisible();
+    await section(page, "Play");
+    await page
+      .getByRole("button", { name: "Roll your die", exact: true })
+      .click();
+    await page.clock.fastForward(550);
+    await expect(arena).toHaveAttribute("data-phase", "faces");
+    await expect(
+      page.getByLabel(`d2 rolled ${scenario.total}`, { exact: true }),
+    ).toBeVisible();
+    await expect(wallet).toBeDisabled();
+    await expect(page.getByTestId("target")).toHaveText("1");
+    // Complete state is durable during the visual sequence, but the visible money is withheld.
+    expect(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem("master-roller:save")!).balance,
+      ),
+    ).toBe(scenario.earned);
+    await page.clock.fastForward(280);
+    await expect(arena).toHaveAttribute("data-phase", "gathering");
+    expect(
+      await page
+        .locator(".play-die")
+        .evaluateAll((dice) =>
+          dice.every((die) => die.getAnimations().length > 0),
+        ),
+    ).toBe(true);
+    await expect(arena).toHaveAttribute("data-phase", "total");
+    await expect(page.locator(".play-die").first()).toHaveCSS("opacity", "0");
+    await expect(page.locator(".sum-burst")).toHaveCSS("opacity", "1");
+    await expect(page.locator(".sum-burst strong")).toHaveText(
+      String(scenario.total),
+    );
+    await expect(wallet).toBeVisible();
+    await page.clock.fastForward(350);
+    await expect(arena).toHaveAttribute("data-phase", "reward");
+    await expect(page.locator(".earned-reward")).toContainText(
+      `+${scenario.earned}`,
+    );
+    await page.clock.fastForward(500);
+    await expect(arena).toHaveAttribute("data-phase", "crediting");
+    await expect(page.getByTestId("reward-flight")).toBeVisible();
+    await expect(wallet).toBeVisible();
+    await expect(arena).toHaveAttribute("data-phase", "collected");
+    await expect(
+      page.getByRole("button", {
+        name: `${scenario.earned} Dicecoin`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByTestId("target")).toHaveText(String(scenario.level));
+    await expect(page.getByTestId("reward-flight")).toHaveCount(0);
+    await page.clock.fastForward(220);
+    await expect(arena).toHaveAttribute("data-phase", "idle");
+    await expect(
+      page.getByRole("button", { name: "Roll your die", exact: true }),
+    ).toBeEnabled();
+  });
+}
+
+test("refresh during the reward flight preserves exactly one reward", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  await page.addInitScript(() => {
+    Math.random = () => 0.99;
+  });
+  await page.goto("./");
+  const arena = page.getByRole("region", { name: "Roll arena" });
+  await page
+    .getByRole("button", { name: "Roll your die", exact: true })
+    .click();
+  await page.clock.fastForward(550);
+  await expect(arena).toHaveAttribute("data-phase", "faces");
+  await page.clock.fastForward(280);
+  await expect(arena).toHaveAttribute("data-phase", "total");
+  await page.clock.fastForward(350);
+  await page.clock.fastForward(500);
+  await expect(arena).toHaveAttribute("data-phase", "crediting");
+  await expect(
+    page.getByRole("button", { name: "0 Dicecoin", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "20 Dicecoin", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("target")).toHaveText("2");
+  await expect(arena).toHaveAttribute("data-phase", "idle");
+  await page.clock.fastForward(10000);
+  await expect(
+    page.getByRole("button", { name: "20 Dicecoin", exact: true }),
+  ).toBeVisible();
 });

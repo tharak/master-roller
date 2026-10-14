@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   buyDie,
   DICE,
@@ -11,6 +11,16 @@ import {
   type TestOffer,
 } from "./game";
 import { loadGame, saveGame, type SaveStatus } from "./storage";
+
+type RollPhase =
+  | "idle"
+  | "rolling"
+  | "faces"
+  | "gathering"
+  | "total"
+  | "reward"
+  | "crediting"
+  | "collected";
 
 const number = (value: number) => value.toLocaleString("en-US");
 function Coin({ amount }: { amount?: number }) {
@@ -35,13 +45,20 @@ export default function App() {
   const [initial] = useState(initialSave);
   const [game, setGame] = useState(initial.state);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(initial.status);
-  const [rolling, setRolling] = useState(false);
+  const [phase, setPhase] = useState<RollPhase>("idle");
+  const rolling = phase !== "idle";
   const [modal, setModal] = useState<
     "reset" | "test" | "recovery" | "shop" | "help" | null
   >(initial.status === "invalid" ? "recovery" : null);
   const [message, setMessage] = useState("");
   const busy = useRef(false);
-  const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  const diceField = useRef<HTMLElement>(null);
+  const sumAnchor = useRef<HTMLDivElement>(null);
+  const wallet = useRef<HTMLButtonElement>(null);
+  const reward = useRef<HTMLSpanElement>(null);
+  const coinFlight = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const stats = poolStats(game);
@@ -56,12 +73,110 @@ export default function App() {
       setSaveStatus("unavailable");
     }
   }, [game, saveStatus]);
-  useEffect(
-    () => () => {
-      if (rollTimer.current) clearTimeout(rollTimer.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    const transitions: Partial<
+      Record<RollPhase, { delay: number; next: RollPhase }>
+    > = {
+      rolling: { delay: 550, next: "faces" },
+      faces: { delay: 280, next: "gathering" },
+      total: { delay: 350, next: "reward" },
+      reward: { delay: 500, next: "crediting" },
+      collected: { delay: 220, next: "idle" },
+    };
+    const transition = transitions[phase];
+    if (!transition) return;
+    const timer = setTimeout(() => {
+      // Commit one complete result once; only its presentation waits for the flight.
+      if (phase === "rolling") setGame(rollGame(gameRef.current));
+      if (transition.next === "idle") busy.current = false;
+      setPhase(transition.next);
+    }, transition.delay);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  useLayoutEffect(() => {
+    if (phase !== "gathering" || !sumAnchor.current || !diceField.current)
+      return;
+    const target = sumAnchor.current.getBoundingClientRect();
+    const dice = Array.from(
+      diceField.current.querySelectorAll<HTMLElement>(".play-die"),
+    );
+    const animations = dice.map((die, index) => {
+      const start = die.getBoundingClientRect();
+      const x = target.left + target.width / 2 - start.left - start.width / 2;
+      const y = target.top + target.height / 2 - start.top - start.height / 2;
+      return die.animate(
+        [
+          { transform: getComputedStyle(die).transform, opacity: 1 },
+          {
+            transform: `translate(${x}px, ${y}px) rotate(${index % 2 ? 160 : -160}deg) scale(0.08)`,
+            opacity: 0,
+          },
+        ],
+        {
+          duration: 520,
+          delay: (index % 6) * 15,
+          easing: "cubic-bezier(.45, 0, .8, .45)",
+          fill: "forwards",
+        },
+      );
+    });
+    let active = true;
+    void Promise.all(animations.map((animation) => animation.finished))
+      .then(() => {
+        if (active) setPhase("total");
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      animations.forEach((animation) => animation.cancel());
+    };
+  }, [phase]);
+
+  useLayoutEffect(() => {
+    if (
+      phase !== "crediting" ||
+      !reward.current ||
+      !wallet.current ||
+      !coinFlight.current
+    )
+      return;
+    const from = reward.current.getBoundingClientRect();
+    const to = wallet.current.getBoundingClientRect();
+    const flyer = coinFlight.current;
+    flyer.style.left = `${from.left}px`;
+    flyer.style.top = `${from.top}px`;
+    flyer.style.width = `${from.width}px`;
+    flyer.style.height = `${from.height}px`;
+    const x = to.left + to.width / 2 - from.left - from.width / 2;
+    const y = to.top + to.height / 2 - from.top - from.height / 2;
+    const animation = flyer.animate(
+      [
+        { transform: "translate(0, 0) scale(1)", opacity: 1 },
+        {
+          transform: `translate(${x * 0.3}px, ${y * 0.4 - 32}px) scale(1.2)`,
+          opacity: 1,
+          offset: 0.4,
+        },
+        { transform: `translate(${x}px, ${y}px) scale(.55)`, opacity: 0.8 },
+      ],
+      {
+        duration: 700,
+        easing: "cubic-bezier(.4, 0, .35, 1)",
+        fill: "forwards",
+      },
+    );
+    let active = true;
+    void animation.finished
+      .then(() => {
+        if (active) setPhase("collected");
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      animation.cancel();
+    };
+  }, [phase]);
   useEffect(() => {
     if (modal) {
       if (!dialog.current?.open) {
@@ -82,15 +197,12 @@ export default function App() {
   function roll() {
     if (busy.current || modal) return;
     busy.current = true;
-    setRolling(true);
-    rollTimer.current = setTimeout(
-      () => {
-        setGame((current) => rollGame(current));
-        setRolling(false);
-        busy.current = false;
-      },
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 550,
-    );
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setGame(rollGame(game));
+      busy.current = false;
+      return;
+    }
+    setPhase("rolling");
   }
   function buy(id: DieId) {
     if (busy.current) return;
@@ -113,6 +225,20 @@ export default function App() {
     setMessage("Reset");
   }
   const last = game.lastRoll;
+  const awaitingCredit =
+    phase !== "idle" && phase !== "rolling" && phase !== "collected";
+  const displayedBalance =
+    game.balance - (awaitingCredit ? (last?.reward ?? 0) : 0);
+  const displayedLevel =
+    rolling && phase !== "collected" && last && phase !== "rolling"
+      ? last.level
+      : game.level;
+  const showSum = ["total", "reward", "crediting", "collected"].includes(phase);
+  const showOutcome =
+    phase === "idle" ||
+    phase === "reward" ||
+    phase === "crediting" ||
+    phase === "collected";
 
   const visibleDice = DICE.flatMap((die) => {
     const values =
@@ -134,12 +260,21 @@ export default function App() {
         <h1 className="brand">
           master<span>roller</span>
         </h1>
-        <span className="wallet" aria-label={`${game.balance} Dicecoin`}>
-          <Coin amount={game.balance} />
-        </span>
+        <button
+          ref={wallet}
+          className={`wallet ${phase === "collected" ? "wallet-collected" : ""}`}
+          aria-label={`${displayedBalance} Dicecoin`}
+          aria-description="Open dice shop"
+          aria-haspopup="dialog"
+          disabled={rolling || modal === "recovery"}
+          onClick={() => setModal("shop")}
+        >
+          <Coin amount={displayedBalance} />
+        </button>
         <button
           className="icon-button"
           aria-label="How to play"
+          disabled={rolling}
           onClick={() => setModal("help")}
         >
           ?
@@ -160,19 +295,21 @@ export default function App() {
           </p>
         )}
         <section
-          className={`arena ${rolling ? "is-rolling" : ""} ${last?.won && !rolling ? "is-win" : ""}`}
+          className={`arena phase-${phase} ${phase === "rolling" ? "is-rolling" : ""} ${last?.won && showOutcome ? "is-win" : ""}`}
           aria-label="Roll arena"
+          data-phase={phase}
         >
           <div className="level-target">
             <span className="level-label">LEVEL</span>
             <div className="target-value">
-              <span className="target-sign" aria-hidden="true">
-                ≥
-              </span>
-              <span data-testid="target">{number(game.level)}</span>
+              <span data-testid="target">{number(displayedLevel)}</span>
             </div>
           </div>
-          <section className="dice-field" aria-label="Your collection">
+          <section
+            ref={diceField}
+            className="dice-field"
+            aria-label="Your collection"
+          >
             <div
               className="dice-count"
               aria-label={`${stats.count} ${stats.count === 1 ? "die" : "dice"}`}
@@ -190,7 +327,11 @@ export default function App() {
                 >
                   <span className="die-type">{die.id}</span>
                   <strong className="die-value">
-                    {rolling ? "·" : value === undefined ? "?" : value}
+                    {phase === "rolling"
+                      ? "·"
+                      : value === undefined
+                        ? "?"
+                        : value}
                   </strong>
                   {index === 0 && game.inventory[die.id] > 1 && (
                     <span className="die-quantity">
@@ -208,6 +349,14 @@ export default function App() {
                 </div>
               ))}
             </div>
+            <div
+              ref={sumAnchor}
+              className={`sum-burst ${showSum ? "sum-visible" : ""}`}
+              aria-hidden="true"
+            >
+              <span>TOTAL</span>
+              <strong>{last ? number(last.total) : ""}</strong>
+            </div>
           </section>
           <div
             className="result-area"
@@ -215,15 +364,18 @@ export default function App() {
             aria-live="polite"
             aria-atomic="true"
           >
-            {last && !rolling ? (
+            {last && showOutcome ? (
               <>
-                <div className="roll-total">
+                <div className={`roll-total ${rolling ? "total-pending" : ""}`}>
                   <span>TOTAL</span>
                   <strong data-testid="roll-total">{number(last.total)}</strong>
                 </div>
                 <div className={`outcome ${last.won ? "won" : "lost"}`}>
                   <strong>{last.won ? "CLEARED!" : "TRY AGAIN"}</strong>
-                  <span>
+                  <span
+                    ref={reward}
+                    className={`earned-reward ${phase !== "reward" ? "reward-departed" : ""}`}
+                  >
                     +{last.reward} <Coin />
                   </span>
                   <span className="sr-only">
@@ -234,7 +386,11 @@ export default function App() {
               </>
             ) : (
               <div className="ready-label">
-                {rolling ? "ROLLING…" : "TAP TO ROLL"}
+                {phase === "idle"
+                  ? "TAP TO ROLL"
+                  : phase === "rolling"
+                    ? "ROLLING…"
+                    : "\u00a0"}
               </div>
             )}
           </div>
@@ -253,14 +409,6 @@ export default function App() {
             <span aria-hidden="true">↻</span>
             {rolling ? "ROLLING…" : "ROLL"}
           </button>
-          <button
-            className="shop-button"
-            aria-label="Dice shop"
-            disabled={rolling}
-            onClick={() => setModal("shop")}
-          >
-            <span aria-hidden="true">+</span>DICE
-          </button>
         </div>
         <div className="save-status">
           <span
@@ -274,6 +422,17 @@ export default function App() {
           />
         </div>
       </main>
+      {phase === "crediting" && last && (
+        <div
+          ref={coinFlight}
+          className="reward-flight"
+          data-testid="reward-flight"
+          aria-hidden="true"
+        >
+          +{last.reward} <Coin />
+          <span className="coin-trail" />
+        </div>
+      )}
       <div
         className={`toast ${message && !modal ? "visible" : ""}`}
         role="status"
