@@ -1,5 +1,13 @@
 # Mobile Web Test Release — v0.1.0
 
+## One-second skippable rolls — #27
+
+The complete roll presentation lasts 1,000 ms, from tumbling through wallet collection, for both wins and losses. The enabled Skip button replaces Roll during the sequence and completes the already-generated result immediately. Pending results commit once on face reveal or Skip, and remaining timers and flights cancel when the sequence ends. Reduced motion remains immediate.
+
+Earned Dicecoin now appears centered on the Level X text at the collision point, then flies up to the wallet. The level text returns as the money departs. Visible wallet credit waits for collection, while the resolved reward remains saved once. Collision geometry is measured again at impact to follow viewport changes.
+
+Validation: the full gate passes with 52 unit checks and 58 desktop/mobile browser checks, production type checking/build and unchanged progression simulations. Exact-target wins, overshoots and losses verify 1,000 ms completion, level-centered reward origins and wallet destinations. Skip checks cover rolling, gathering and crediting, a subsequent roll and reload, and canceled work never adds the reward twice.
+
 ## Value pricing and increasing slot costs — #25
 
 Live dice prices are 5/7/9/11/13/21/101, twice each die’s average. Extra slots cost 3 × slots already owned: 3, 6, 9, 12… Dicecoin. The starter die and slot are free. Existing saves retain their balance, collection and capacity; the next slot price follows saved capacity without a schema change.
